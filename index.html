@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>KR Store | Toko Digital Masa Depan</title>
+    <!-- Google Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- GSAP & ScrollTrigger -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #050510;
+            color: #ffffff;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Custom Cursor */
+        .cursor-dot {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            background: #ff3366;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transition: transform 0.1s ease;
+            box-shadow: 0 0 15px #ff3366;
+        }
+
+        .cursor-outline {
+            position: fixed;
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(255, 51, 102, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9998;
+            transition: transform 0.2s ease, width 0.2s, height 0.2s;
+            backdrop-filter: invert(0.2);
+        }
+
+        /* Canvas 3D Background */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.7;
+        }
+
+        /* Main Content */
+        .content {
+            position: relative;
+            z-index: 2;
+            pointer-events: auto;
+        }
+
+        /* Glassmorphic Navbar */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 5%;
+            backdrop-filter: blur(12px);
+            background: rgba(5, 5, 20, 0.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #ff3366, #33ffcc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2.5rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: 500;
+            transition: 0.3s;
+            position: relative;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0%;
+            height: 2px;
+            background: linear-gradient(90deg, #ff3366, #33ffcc);
+            transition: width 0.3s;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            flex-direction: column;
+            padding: 2rem;
+        }
+
+        .hero h1 {
+            font-size: 5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ffffff, #ff3366, #33ffcc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+            letter-spacing: -2px;
+            animation: glitch 3s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 100% { text-shadow: 2px 0 #ff3366, -2px 0 #33ffcc; transform: skew(0deg);}
+            25% { text-shadow: -3px 0 #ff3366, 3px 0 #33ffcc; transform: skew(1deg);}
+            50% { text-shadow: 4px 0 #ff3366, -4px 0 #33ffcc; transform: skew(-1deg);}
+            75% { text-shadow: -2px 0 #ff3366, 2px 0 #33ffcc; transform: skew(0.5deg);}
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.8);
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        .btn-glow {
+            padding: 1rem 2.5rem;
+            background: rgba(255, 51, 102, 0.2);
+            border: 1px solid rgba(255, 51, 102, 0.6);
+            color: white;
+            font-weight: bold;
+            border-radius: 50px;
+            backdrop-filter: blur(8px);
+            transition: 0.4s;
+            font-size: 1rem;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-glow:hover {
+            background: #ff3366;
+            box-shadow: 0 0 25px #ff3366;
+            transform: scale(1.05);
+        }
+
+        /* Product Section */
+        .products {
+            padding: 5rem 5%;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #33ffcc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Magnetic 3D Card */
+        .product-card {
+            background: rgba(20, 20, 50, 0.4);
+            backdrop-filter: blur(12px);
+            border-radius: 28px;
+            padding: 2rem 1.5rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+            transform-style: preserve-3d;
+            transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .product-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,51,102,0.2) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+
+        .product-card:hover::before {
+            opacity: 1;
+        }
+
+        .product-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            color: #ff3366;
+        }
+
+        .product-card h3 {
+            font-size: 1.6rem;
+            margin-bottom: 1rem;
+        }
+
+        .product-card p {
+            color: #ccc;
+            margin-bottom: 1.5rem;
+        }
+
+        .price {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #33ffcc;
+            margin-bottom: 1.5rem;
+        }
+
+        .buy-btn {
+            background: linear-gradient(90deg, #ff3366, #ff6b3d);
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 40px;
+            color: white;
+            font-weight: bold;
+            width: 100%;
+            cursor: pointer;
+            transition: 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .buy-btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: 0.5s;
+        }
+
+        .buy-btn:hover::after {
+            left: 100%;
+        }
+
+        /* Floating Shapes Animation */
+        .floating-shape {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, #ff3366, transparent);
+            filter: blur(80px);
+            opacity: 0.3;
+            border-radius: 50%;
+            z-index: 0;
+            animation: float 12s infinite alternate ease-in-out;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1);}
+            100% { transform: translate(100px, -100px) scale(1.5);}
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.5);
+            margin-top: 4rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .navbar { flex-direction: column; gap: 1rem; }
+            .nav-links { gap: 1rem; flex-wrap: wrap; justify-content: center; }
+            .cursor-dot, .cursor-outline { display: none; }
+            body { cursor: auto; }
+        }
+
+        /* Scroll Animations (GSAP) */
+        .fade-up {
+            opacity: 0;
+            transform: translateY(50px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Custom Cursor -->
+    <div class="cursor-dot"></div>
+    <div class="cursor-outline"></div>
+
+    <!-- 3D Canvas Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Floating abstract shapes -->
+    <div class="floating-shape" style="top: 10%; left: -5%;"></div>
+    <div class="floating-shape" style="bottom: 20%; right: -10%; width: 300px; height: 300px; background: radial-gradient(circle, #33ffcc, transparent); animation-duration: 15s;"></div>
+
+    <div class="content">
+        <nav class="navbar">
+            <div class="logo">KR STORE</div>
+            <ul class="nav-links">
+                <li><a href="#">Beranda</a></li>
+                <li><a href="#products">Produk</a></li>
+                <li><a href="#">Koleksi</a></li>
+                <li><a href="#">Kontak</a></li>
+            </ul>
+        </nav>
+
+        <section class="hero">
+            <h1>Evolusi Digital<br>Dimulai Di Sini</h1>
+            <p>Koleksi eksklusif aset digital, template premium, dan software inovatif dengan efek visual futuristik.</p>
+            <button class="btn-glow" id="exploreBtn">Jelajahi Sekarang <i class="fas fa-arrow-right"></i></button>
+        </section>
+
+        <section id="products" class="products">
+            <h2 class="section-title fade-up">✨ Produk Digital Premium ✨</h2>
+            <div class="product-grid">
+                <!-- Card 1 -->
+                <div class="product-card fade-up" data-tilt>
+                    <div class="product-icon"><i class="fas fa-crown"></i></div>
+                    <h3>UI Kit Pro 2025</h3>
+                    <p>300+ komponen modern, dark mode, animasi siap pakai untuk Figma & React.</p>
+                    <div class="price">Rp 249K</div>
+                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
+                </div>
+                <!-- Card 2 -->
+                <div class="product-card fade-up" data-tilt>
+                    <div class="product-icon"><i class="fas fa-code"></i></div>
+                    <h3>Code Generator AI</h3>
+                    <p>Tools AI canggih untuk generate kode front-end dengan gaya futuristik.</p>
+                    <div class="price">Rp 599K</div>
+                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
+                </div>
+                <!-- Card 3 -->
+                <div class="product-card fade-up" data-tilt>
+                    <div class="product-icon"><i class="fas fa-cube"></i></div>
+                    <h3>3D Asset Pack</h3>
+                    <p>50+ model 3D berkualitas tinggi untuk WebGL, Three.js, dan metaverse.</p>
+                    <div class="price">Rp 399K</div>
+                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
+                </div>
+                <!-- Card 4 -->
+                <div class="product-card fade-up" data-tilt>
+                    <div class="product-icon"><i class="fas fa-music"></i></div>
+                    <h3>Royalty SFX Bundle</h3>
+                    <p>Koleksi 500+ efek suara & musik latar bebas lisensi untuk kreator.</p>
+                    <div class="price">Rp 179K</div>
+                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>© 2025 KR Store — Toko Digital dengan Pengalaman Immersive</p>
+            <div style="margin-top: 1rem;">
+                <i class="fab fa-instagram"></i>  <i class="fab fa-twitter"></i>  <i class="fab fa-github"></i>  <i class="fab fa-discord"></i>
+            </div>
+        </footer>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // Setup Scene, Camera, Renderer
+        const canvas = document.getElementById('bg-canvas');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050510, 0.008);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 8);
+        
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        
+        // Particle System - Efek Nebula Interaktif
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 1800;
+        const posArray = new Float32Array(particlesCount * 3);
+        for(let i = 0; i < particlesCount * 3; i += 3) {
+            posArray[i] = (Math.random() - 0.5) * 30;
+            posArray[i+1] = (Math.random() - 0.5) * 15;
+            posArray[i+2] = (Math.random() - 0.5) * 20 - 10;
+        }
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        
+        const particlesMaterial = new THREE.PointsMaterial({
+            color: 0xff3366,
+            size: 0.08,
+            transparent: true,
+            blending: THREE.AdditiveBlending
+        });
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+        
+        // Tambahan titik-titik berwarna cyan
+        const particlesGeometry2 = new THREE.BufferGeometry();
+        const posArray2 = new Float32Array(1200 * 3);
+        for(let i = 0; i < 1200 * 3; i += 3) {
+            posArray2[i] = (Math.random() - 0.5) * 25;
+            posArray2[i+1] = (Math.random() - 0.5) * 12;
+            posArray2[i+2] = (Math.random() - 0.5) * 18 - 5;
+        }
+        particlesGeometry2.setAttribute('position', new THREE.BufferAttribute(posArray2, 3));
+        const particlesMaterial2 = new THREE.PointsMaterial({
+            color: 0x33ffcc,
+            size: 0.06,
+            transparent: true,
+            blending: THREE.AdditiveBlending
+        });
+        const particlesMesh2 = new THREE.Points(particlesGeometry2, particlesMaterial2);
+        scene.add(particlesMesh2);
+        
+        // Torus Knot Futuristik
+        const torusKnotGeo = new THREE.TorusKnotGeometry(1.2, 0.28, 200, 32, 3, 4);
+        const torusMat = new THREE.MeshStandardMaterial({ color: 0xff3366, emissive: 0x331122, roughness: 0.2, metalness: 0.8 });
+        const torusKnot = new THREE.Mesh(torusKnotGeo, torusMat);
+        scene.add(torusKnot);
+        
+        // Bola kecil melayang
+        const sphereGeo = new THREE.SphereGeometry(0.5, 32, 32);
+        const sphereMat = new THREE.MeshStandardMaterial({ color: 0x33ffcc, emissive: 0x116655, roughness: 0.3 });
+        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+        sphere.position.set(1.5, -1, -2);
+        scene.add(sphere);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xff66aa, 1);
+        pointLight.position.set(2, 3, 4);
+        scene.add(pointLight);
+        const pointLight2 = new THREE.PointLight(0x33ffcc, 0.8);
+        pointLight2.position.set(-2, 1, 3);
+        scene.add(pointLight2);
+        
+        // Animate mouse interaction for particles and rotation
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+            mouseY = (event.clientY / window.innerHeight) * 2 - 1;
+        });
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotasi dinamis berdasarkan mouse
+            torusKnot.rotation.x += 0.008;
+            torusKnot.rotation.y += 0.012;
+            torusKnot.rotation.z += 0.005;
+            sphere.rotation.x += 0.01;
+            sphere.rotation.y += 0.015;
+            
+            particlesMesh.rotation.y = mouseX * 0.5;
+            particlesMesh.rotation.x = mouseY * 0.3;
+            particlesMesh2.rotation.y = mouseX * 0.4;
+            particlesMesh2.rotation.x = mouseY * 0.2;
+            
+            camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY * 0.3 - camera.position.y) * 0.05;
+            camera.lookAt(0, 0, 0);
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+
+    <script>
+        // GSAP Scroll Animations + Advanced Effects
+        gsap.registerPlugin(ScrollTrigger);
+        
+        // Fade up animation for all .fade-up elements
+        gsap.utils.toArray('.fade-up').forEach(el => {
+            gsap.fromTo(el, 
+                { opacity: 0, y: 60 },
+                {
+                    opacity: 1,
+                    y: 0,
+                    duration: 1.2,
+                    ease: "power3.out",
+                    scrollTrigger: {
+                        trigger: el,
+                        start: "top 85%",
+                        toggleActions: "play none none reverse"
+                    }
+                }
+            );
+        });
+        
+        // Hero title glitch effect with GSAP (continuous)
+        const heroTitle = document.querySelector('.hero h1');
+        if(heroTitle) {
+            gsap.to(heroTitle, {
+                duration: 0.1,
+                repeat: -1,
+                repeatDelay: 3,
+                skewX: "random(-2, 2)",
+                skewY: "random(-1, 1)",
+                yoyo: true,
+                ease: "none"
+            });
+        }
+        
+        // Magnetic 3D Tilt Effect pada Cards (interaktif canggih)
+        const cards = document.querySelectorAll('.product-card');
+        cards.forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                const rotateX = (y - centerY) / 20;
+                const rotateY = (centerX - x) / 20;
+                card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+                card.style.transition = 'transform 0.1s ease-out';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
+                card.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1)';
+            });
+        });
+        
+        // Custom Cursor Logic with Smooth Following
+        const cursorDot = document.querySelector('.cursor-dot');
+        const cursorOutline = document.querySelector('.cursor-outline');
+        let mousePos = { x: 0, y: 0 };
+        let dotPos = { x: 0, y: 0 };
+        let outlinePos = { x: 0, y: 0 };
+        
+        document.addEventListener('mousemove', (e) => {
+            mousePos.x = e.clientX;
+            mousePos.y = e.clientY;
+        });
+        
+        function animateCursor() {
+            dotPos.x += (mousePos.x - dotPos.x) * 0.2;
+            dotPos.y += (mousePos.y - dotPos.y) * 0.2;
+            outlinePos.x += (mousePos.x - outlinePos.x) * 0.1;
+            outlinePos.y += (mousePos.y - outlinePos.y) * 0.1;
+            
+            cursorDot.style.transform = `translate(${dotPos.x - 4}px, ${dotPos.y - 4}px)`;
+            cursorOutline.style.transform = `translate(${outlinePos.x - 20}px, ${outlinePos.y - 20}px)`;
+            requestAnimationFrame(animateCursor);
+        }
+        animateCursor();
+        
+        // Interaktif pada tombol & link mengubah ukuran cursor
+        const interactiveElements = document.querySelectorAll('a, button, .buy-btn, .btn-glow');
+        interactiveElements.forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                cursorOutline.style.width = '70px';
+                cursorOutline.style.height = '70px';
+                cursorOutline.style.borderColor = '#33ffcc';
+                cursorDot.style.backgroundColor = '#33ffcc';
+            });
+            el.addEventListener('mouseleave', () => {
+                cursorOutline.style.width = '40px';
+                cursorOutline.style.height = '40px';
+                cursorOutline.style.borderColor = 'rgba(255, 51, 102, 0.6)';
+                cursorDot.style.backgroundColor = '#ff3366';
+            });
+        });
+        
+        // Efek Khusus: Particle Burst saat mengklik tombol "Beli Sekarang"
+        const buyButtons = document.querySelectorAll('.buy-btn');
+        function createParticleBurst(x, y) {
+            for(let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.style.position = 'fixed';
+                particle.style.width = '6px';
+                particle.style.height = '6px';
+                particle.style.background = `radial-gradient(circle, #ff3366, #33ffcc)`;
+                particle.style.borderRadius = '50%';
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                particle.style.pointerEvents = 'none';
+                particle.style.zIndex = '9999';
+                document.body.appendChild(particle);
+                
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 3 + Math.random() * 6;
+                const vx = Math.cos(angle) * velocity;
+                const vy = Math.sin(angle) * velocity;
+                let opacity = 1;
+                let posX = x, posY = y;
+                
+                function animateParticle() {
+                    posX += vx;
+                    posY += vy;
+                    opacity -= 0.02;
+                    particle.style.left = posX + 'px';
+                    particle.style.top = posY + 'px';
+                    particle.style.opacity = opacity;
+                    if(opacity <= 0) {
+                        particle.remove();
+                        return;
+                    }
+                    requestAnimationFrame(animateParticle);
+                }
+                animateParticle();
+            }
+        }
+        
+        buyButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const rect = btn.getBoundingClientRect();
+                const x = rect.left + rect.width / 2;
+                const y = rect.top + rect.height / 2;
+                createParticleBurst(x, y);
+                // Notifikasi sederhana (demo)
+                const toast = document.createElement('div');
+                toast.innerText = '✨ Item ditambahkan ke keranjang! ✨';
+                toast.style.position = 'fixed';
+                toast.style.bottom = '20px';
+                toast.style.right = '20px';
+                toast.style.background = 'rgba(0,0,0,0.8)';
+                toast.style.backdropFilter = 'blur(12px)';
+                toast.style.padding = '12px 24px';
+                toast.style.borderRadius = '50px';
+                toast.style.borderLeft = '4px solid #ff3366';
+                toast.style.color = 'white';
+                toast.style.fontWeight = 'bold';
+                toast.style.zIndex = '10000';
+                toast.style.animation = 'fadeInOut 2s ease forwards';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            });
+        });
+        
+        // Animasi fade in out untuk toast
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeInOut {
+                0% { opacity: 0; transform: translateY(20px);}
+                15% { opacity: 1; transform: translateY(0);}
+                85% { opacity: 1; transform: translateY(0);}
+                100% { opacity: 0; transform: translateY(-20px);}
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Tombol Explore smooth scroll
+        document.getElementById('exploreBtn').addEventListener('click', () => {
+            document.getElementById('products').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        
+        // Efek unik: parallax pada floating shape
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const shapes = document.querySelectorAll('.floating-shape');
+            shapes.forEach((shape, idx) => {
+                const speed = 0.2 + idx * 0.1;
+                shape.style.transform = `translateY(${scrollY * speed}px)`;
+            });
+        });
+    </script>
+</body>
+</html>
