@@ -2,721 +2,697 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>KR Store | Toko Digital Masa Depan</title>
-    <!-- Google Fonts & Icons -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- GSAP & ScrollTrigger -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kimjong Store - Premium Marketplace</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            cursor: none;
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --accent-color: #ffd700; 
+            --accent-hover: #ccac00;
+            --text-main: #ffffff;
+            --text-muted: #888888;
+            --danger: #ff4444;
+            --warning: #ffaa00;
+            --success: #00cc66;
         }
 
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #050510;
-            color: #ffffff;
-            overflow-x: hidden;
-            scroll-behavior: smooth;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
-        /* Custom Cursor */
-        .cursor-dot {
-            position: fixed;
-            width: 8px;
-            height: 8px;
-            background: #ff3366;
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: 9999;
-            transition: transform 0.1s ease;
-            box-shadow: 0 0 15px #ff3366;
-        }
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
 
-        .cursor-outline {
-            position: fixed;
-            width: 40px;
-            height: 40px;
-            border: 2px solid rgba(255, 51, 102, 0.6);
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: 9998;
-            transition: transform 0.2s ease, width 0.2s, height 0.2s;
-            backdrop-filter: invert(0.2);
-        }
+        /* Navbar */
+        nav { display: flex; justify-content: space-between; align-items: center; padding: 1rem 5%; background-color: rgba(30, 30, 30, 0.95); border-bottom: 1px solid #333; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); }
+        .logo { font-size: 1.5rem; font-weight: bold; letter-spacing: 2px; color: var(--text-main); }
+        .logo span { color: var(--accent-color); }
 
-        /* Canvas 3D Background */
-        #bg-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            opacity: 0.7;
-        }
+        .nav-links button { background: none; border: 1px solid var(--accent-color); color: var(--accent-color); padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; font-weight: bold; transition: all 0.3s ease; }
+        .nav-links button:hover { background: var(--accent-color); color: var(--bg-color); }
 
-        /* Main Content */
-        .content {
-            position: relative;
-            z-index: 2;
-            pointer-events: auto;
-        }
+        /* Container */
+        .container { padding: 2rem 5%; max-width: 1200px; margin: auto; flex: 1; width: 100%; }
+        .section-title { margin-bottom: 1.5rem; font-size: 2rem; border-left: 4px solid var(--accent-color); padding-left: 10px; }
 
-        /* Glassmorphic Navbar */
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.5rem 5%;
-            backdrop-filter: blur(12px);
-            background: rgba(5, 5, 20, 0.5);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+        /* Search & Filter */
+        .controls-container { margin-bottom: 2rem; width: 100%; }
+        #search-input { width: 100%; padding: 1rem; background-color: var(--card-bg); border: 1px solid #333; color: var(--text-main); border-radius: 8px; font-size: 1rem; margin-bottom: 1rem; transition: all 0.3s ease; }
+        #search-input:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 15px rgba(255, 215, 0, 0.2); }
+        
+        .category-filters { display: flex; gap: 0.8rem; overflow-x: auto; padding-bottom: 0.5rem; scrollbar-width: thin; scrollbar-color: var(--accent-color) var(--bg-color); }
+        .filter-btn { background: var(--card-bg); border: 1px solid #333; color: var(--text-muted); padding: 0.5rem 1.2rem; border-radius: 20px; cursor: pointer; white-space: nowrap; transition: all 0.3s ease; font-size: 0.9rem; }
+        .filter-btn:hover { border-color: var(--accent-hover); color: var(--text-main); }
+        .filter-btn.active { background: var(--accent-color); color: var(--bg-color); border-color: var(--accent-color); font-weight: bold; }
 
-        .logo {
-            font-size: 1.8rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #fff, #ff3366, #33ffcc);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            letter-spacing: -1px;
-        }
+        /* Grid & Cards */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; }
+        .card { background-color: var(--card-bg); border-radius: 8px; overflow: hidden; border: 1px solid #333; display: flex; flex-direction: column; transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease; }
+        .card:hover { transform: translateY(-5px); border-color: var(--accent-color); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); }
+        
+        .card-img { width: 100%; height: 150px; background-color: #2a2a2a; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem; overflow: hidden; position: relative; }
+        .card-category-badge { position: absolute; top: 10px; right: 10px; background: rgba(18, 18, 18, 0.8); color: var(--accent-color); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.7rem; font-weight: bold; border: 1px solid var(--accent-color); z-index: 2; }
+        .card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
+        .card:hover .card-img img { transform: scale(1.1); }
+        
+        .card-content { padding: 1rem; flex: 1; display: flex; flex-direction: column; }
+        .card-title { font-size: 1.2rem; margin-bottom: 0.3rem; }
+        .card-desc-short { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
+        
+        .price-container { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .card-price-original { color: var(--danger); text-decoration: line-through; font-size: 0.9rem; }
+        .card-price { color: var(--accent-color); font-weight: bold; font-size: 1.2rem; }
+        
+        .btn-buy { width: 100%; background-color: var(--accent-color); color: var(--bg-color); border: none; padding: 0.8rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background-color 0.3s ease; }
+        .btn-buy:hover { background-color: var(--accent-hover); }
 
-        .nav-links {
-            display: flex;
-            gap: 2.5rem;
-            list-style: none;
-        }
+        /* Floating Cart */
+        .floating-cart { position: fixed; bottom: 30px; right: 30px; background-color: var(--accent-color); color: var(--bg-color); width: 60px; height: 60px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3); z-index: 90; transition: transform 0.3s ease; }
+        .floating-cart:hover { transform: scale(1.1); }
+        .cart-badge { position: absolute; top: -5px; right: -5px; background-color: var(--danger); color: white; font-size: 0.8rem; font-weight: bold; width: 24px; height: 24px; border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 2px solid var(--bg-color); }
 
-        .nav-links a {
-            color: #fff;
-            text-decoration: none;
-            font-weight: 500;
-            transition: 0.3s;
-            position: relative;
-        }
+        /* Toast Notifications */
+        .toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { background: var(--card-bg); border-left: 4px solid var(--accent-color); color: var(--text-main); padding: 1rem 1.5rem; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; gap: 10px; animation: toastSlideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 1; transition: opacity 0.3s ease; pointer-events: auto; }
+        .toast.hide { opacity: 0; }
+        .toast.success { border-left-color: var(--success); }
+        .toast.danger { border-left-color: var(--danger); }
+        .toast.warning { border-left-color: var(--warning); }
+        @keyframes toastSlideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        .nav-links a::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 0;
-            width: 0%;
-            height: 2px;
-            background: linear-gradient(90deg, #ff3366, #33ffcc);
-            transition: width 0.3s;
-        }
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(18, 18, 18, 0.85); backdrop-filter: blur(5px); z-index: 1000; justify-content: center; align-items: center; padding: 1rem; }
+        .modal-content { background: var(--card-bg); border: 1px solid var(--accent-color); padding: 2.5rem 2rem; border-radius: 8px; width: 100%; max-width: 450px; max-height: 90vh; overflow-y: auto; box-shadow: 0 0 25px rgba(255, 215, 0, 0.15); text-align: left; position: relative; animation: modalFadeIn 0.3s ease; }
+        @keyframes modalFadeIn { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+        .close-modal { position: absolute; top: 15px; right: 20px; font-size: 1.8rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
+        .close-modal:hover { color: var(--danger); }
+        
+        .modal-category { color: var(--accent-color); font-size: 0.8rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .modal-title { font-size: 1.4rem; margin-bottom: 0.5rem; color: var(--text-main); }
+        .modal-desc-full { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; white-space: pre-wrap; }
 
-        .nav-links a:hover::after {
-            width: 100%;
-        }
+        /* Cart List */
+        .cart-item-list { margin-bottom: 1.5rem; border-top: 1px solid #333; padding-top: 1rem; }
+        .cart-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px dashed #333; }
+        .cart-item-info { flex: 1; }
+        .cart-item-name { font-weight: bold; font-size: 1rem; margin-bottom: 0.2rem; }
+        .cart-item-price { color: var(--accent-color); font-size: 0.9rem; }
+        .btn-remove-item { background: var(--danger); color: white; border: none; padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
+        .cart-total { font-size: 1.3rem; font-weight: bold; color: var(--text-main); display: flex; justify-content: space-between; margin-bottom: 1.5rem; }
+        .cart-total span { color: var(--accent-color); }
+        .btn-confirm { width: 100%; background-color: var(--accent-color); color: var(--bg-color); border: none; padding: 1rem; font-weight: bold; font-size: 1.1rem; border-radius: 4px; cursor: pointer; transition: all 0.3s ease; }
+        .btn-confirm:hover { background-color: var(--accent-hover); }
+        .btn-share { width: 100%; background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color); padding: 0.8rem; font-weight: bold; font-size: 1rem; border-radius: 4px; cursor: pointer; transition: all 0.3s ease; margin-bottom: 1rem; }
+        .btn-share:hover { background: rgba(255, 215, 0, 0.1); }
 
-        /* Hero Section */
-        .hero {
-            min-height: 90vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            flex-direction: column;
-            padding: 2rem;
-        }
+        /* Admin Section */
+        #admin-panel { display: none; background-color: var(--card-bg); padding: 2rem; border-radius: 8px; border: 1px dashed var(--accent-color); }
+        
+        /* Dashboard Stats */
+        .dashboard-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: var(--bg-color); border: 1px solid #333; border-radius: 6px; padding: 1.5rem; text-align: center; }
+        .stat-value { font-size: 1.8rem; font-weight: bold; color: var(--accent-color); margin-bottom: 0.2rem; }
+        .stat-label { color: var(--text-muted); font-size: 0.85rem; font-weight: bold; letter-spacing: 1px; }
 
-        .hero h1 {
-            font-size: 5rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, #ffffff, #ff3366, #33ffcc);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            margin-bottom: 1rem;
-            letter-spacing: -2px;
-            animation: glitch 3s infinite;
-        }
-
-        @keyframes glitch {
-            0%, 100% { text-shadow: 2px 0 #ff3366, -2px 0 #33ffcc; transform: skew(0deg);}
-            25% { text-shadow: -3px 0 #ff3366, 3px 0 #33ffcc; transform: skew(1deg);}
-            50% { text-shadow: 4px 0 #ff3366, -4px 0 #33ffcc; transform: skew(-1deg);}
-            75% { text-shadow: -2px 0 #ff3366, 2px 0 #33ffcc; transform: skew(0.5deg);}
-        }
-
-        .hero p {
-            font-size: 1.2rem;
-            color: rgba(255,255,255,0.8);
-            max-width: 600px;
-            margin-bottom: 2rem;
-        }
-
-        .btn-glow {
-            padding: 1rem 2.5rem;
-            background: rgba(255, 51, 102, 0.2);
-            border: 1px solid rgba(255, 51, 102, 0.6);
-            color: white;
-            font-weight: bold;
-            border-radius: 50px;
-            backdrop-filter: blur(8px);
-            transition: 0.4s;
-            font-size: 1rem;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn-glow:hover {
-            background: #ff3366;
-            box-shadow: 0 0 25px #ff3366;
-            transform: scale(1.05);
-        }
-
-        /* Product Section */
-        .products {
-            padding: 5rem 5%;
-        }
-
-        .section-title {
-            text-align: center;
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #fff, #33ffcc);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-
-        .product-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        /* Magnetic 3D Card */
-        .product-card {
-            background: rgba(20, 20, 50, 0.4);
-            backdrop-filter: blur(12px);
-            border-radius: 28px;
-            padding: 2rem 1.5rem;
-            border: 1px solid rgba(255,255,255,0.2);
-            transition: all 0.3s ease;
-            transform-style: preserve-3d;
-            transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .product-card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,51,102,0.2) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.5s;
-            pointer-events: none;
-        }
-
-        .product-card:hover::before {
-            opacity: 1;
-        }
-
-        .product-icon {
-            font-size: 3rem;
-            margin-bottom: 1.5rem;
-            color: #ff3366;
-        }
-
-        .product-card h3 {
-            font-size: 1.6rem;
-            margin-bottom: 1rem;
-        }
-
-        .product-card p {
-            color: #ccc;
-            margin-bottom: 1.5rem;
-        }
-
-        .price {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #33ffcc;
-            margin-bottom: 1.5rem;
-        }
-
-        .buy-btn {
-            background: linear-gradient(90deg, #ff3366, #ff6b3d);
-            border: none;
-            padding: 0.8rem 1.5rem;
-            border-radius: 40px;
-            color: white;
-            font-weight: bold;
-            width: 100%;
-            cursor: pointer;
-            transition: 0.3s;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .buy-btn::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            transition: 0.5s;
-        }
-
-        .buy-btn:hover::after {
-            left: 100%;
-        }
-
-        /* Floating Shapes Animation */
-        .floating-shape {
-            position: absolute;
-            width: 200px;
-            height: 200px;
-            background: radial-gradient(circle, #ff3366, transparent);
-            filter: blur(80px);
-            opacity: 0.3;
-            border-radius: 50%;
-            z-index: 0;
-            animation: float 12s infinite alternate ease-in-out;
-        }
-
-        @keyframes float {
-            0% { transform: translate(0, 0) scale(1);}
-            100% { transform: translate(100px, -100px) scale(1.5);}
-        }
+        .admin-form { display: flex; flex-direction: column; gap: 1rem; max-width: 500px; margin-bottom: 2rem; }
+        .admin-form input, .admin-form textarea { padding: 0.8rem; background-color: var(--bg-color); border: 1px solid #333; color: var(--text-main); border-radius: 4px; }
+        .admin-form textarea { min-height: 100px; resize: vertical; }
+        .form-row { display: flex; gap: 1rem; }
+        .form-row input { flex: 1; }
+        .btn-add { background-color: var(--accent-color); color: var(--bg-color); border: none; padding: 0.8rem; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 0.5rem; }
+        
+        .admin-tools { display: flex; gap: 1rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid #333; flex-wrap: wrap; }
+        .btn-tool { background: transparent; border: 1px solid var(--accent-color); color: var(--accent-color); padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.9rem; }
+        .btn-tool:hover { background: var(--accent-color); color: var(--bg-color); }
+        
+        .admin-table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; min-width: 600px; }
+        th, td { text-align: left; padding: 1rem; border-bottom: 1px solid #333; }
+        th { color: var(--accent-color); }
+        .action-buttons { display: flex; gap: 0.5rem; }
+        .btn-edit { background-color: var(--warning); color: var(--bg-color); border: none; padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        .btn-delete { background-color: var(--danger); color: white; border: none; padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; font-weight: bold; }
 
         /* Footer */
-        footer {
-            text-align: center;
-            padding: 2rem;
-            border-top: 1px solid rgba(255,255,255,0.1);
-            background: rgba(0,0,0,0.5);
-            margin-top: 4rem;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .hero h1 { font-size: 2.5rem; }
-            .navbar { flex-direction: column; gap: 1rem; }
-            .nav-links { gap: 1rem; flex-wrap: wrap; justify-content: center; }
-            .cursor-dot, .cursor-outline { display: none; }
-            body { cursor: auto; }
-        }
-
-        /* Scroll Animations (GSAP) */
-        .fade-up {
-            opacity: 0;
-            transform: translateY(50px);
-        }
+        footer { background-color: var(--card-bg); border-top: 1px solid #333; padding: 2rem 5%; margin-top: auto; }
+        .footer-content { max-width: 1200px; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; }
+        .footer-text { color: var(--text-muted); font-size: 0.9rem; }
+        .social-links { display: flex; gap: 1.5rem; margin-top: 0.5rem; }
+        .social-links a { color: var(--accent-color); text-decoration: none; font-weight: bold; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-    <!-- Custom Cursor -->
-    <div class="cursor-dot"></div>
-    <div class="cursor-outline"></div>
+    <nav>
+        <div class="logo">Kimjong<span>Store</span></div>
+        <div class="nav-links">
+            <button id="toggle-view-btn" onclick="toggleView()">Mode Admin</button>
+        </div>
+    </nav>
 
-    <!-- 3D Canvas Background -->
-    <canvas id="bg-canvas"></canvas>
+    <div class="container">
+        <div id="user-view">
+            <h2 class="section-title">Katalog Produk</h2>
+            
+            <div class="controls-container">
+                <input type="text" id="search-input" placeholder="Ketik nama produk untuk mencari..." oninput="applyFilters()">
+                <div class="category-filters" id="category-filters"></div>
+            </div>
 
-    <!-- Floating abstract shapes -->
-    <div class="floating-shape" style="top: 10%; left: -5%;"></div>
-    <div class="floating-shape" style="bottom: 20%; right: -10%; width: 300px; height: 300px; background: radial-gradient(circle, #33ffcc, transparent); animation-duration: 15s;"></div>
+            <div class="grid" id="product-grid"></div>
+        </div>
 
-    <div class="content">
-        <nav class="navbar">
-            <div class="logo">KR STORE</div>
-            <ul class="nav-links">
-                <li><a href="#">Beranda</a></li>
-                <li><a href="#products">Produk</a></li>
-                <li><a href="#">Koleksi</a></li>
-                <li><a href="#">Kontak</a></li>
-            </ul>
-        </nav>
-
-        <section class="hero">
-            <h1>Evolusi Digital<br>Dimulai Di Sini</h1>
-            <p>Koleksi eksklusif aset digital, template premium, dan software inovatif dengan efek visual futuristik.</p>
-            <button class="btn-glow" id="exploreBtn">Jelajahi Sekarang <i class="fas fa-arrow-right"></i></button>
-        </section>
-
-        <section id="products" class="products">
-            <h2 class="section-title fade-up">✨ Produk Digital Premium ✨</h2>
-            <div class="product-grid">
-                <!-- Card 1 -->
-                <div class="product-card fade-up" data-tilt>
-                    <div class="product-icon"><i class="fas fa-crown"></i></div>
-                    <h3>UI Kit Pro 2025</h3>
-                    <p>300+ komponen modern, dark mode, animasi siap pakai untuk Figma & React.</p>
-                    <div class="price">Rp 249K</div>
-                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
+        <div id="admin-panel">
+            <h2 class="section-title">Dashboard Admin</h2>
+            
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-total-products">0</div>
+                    <div class="stat-label">TOTAL PRODUK</div>
                 </div>
-                <!-- Card 2 -->
-                <div class="product-card fade-up" data-tilt>
-                    <div class="product-icon"><i class="fas fa-code"></i></div>
-                    <h3>Code Generator AI</h3>
-                    <p>Tools AI canggih untuk generate kode front-end dengan gaya futuristik.</p>
-                    <div class="price">Rp 599K</div>
-                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-total-categories">0</div>
+                    <div class="stat-label">KATEGORI</div>
                 </div>
-                <!-- Card 3 -->
-                <div class="product-card fade-up" data-tilt>
-                    <div class="product-icon"><i class="fas fa-cube"></i></div>
-                    <h3>3D Asset Pack</h3>
-                    <p>50+ model 3D berkualitas tinggi untuk WebGL, Three.js, dan metaverse.</p>
-                    <div class="price">Rp 399K</div>
-                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
-                </div>
-                <!-- Card 4 -->
-                <div class="product-card fade-up" data-tilt>
-                    <div class="product-icon"><i class="fas fa-music"></i></div>
-                    <h3>Royalty SFX Bundle</h3>
-                    <p>Koleksi 500+ efek suara & musik latar bebas lisensi untuk kreator.</p>
-                    <div class="price">Rp 179K</div>
-                    <button class="buy-btn">Beli Sekarang <i class="fas fa-shopping-cart"></i></button>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-total-value">Rp 0</div>
+                    <div class="stat-label">NILAI ASET</div>
                 </div>
             </div>
-        </section>
 
-        <footer>
-            <p>© 2025 KR Store — Toko Digital dengan Pengalaman Immersive</p>
-            <div style="margin-top: 1rem;">
-                <i class="fab fa-instagram"></i>  <i class="fab fa-twitter"></i>  <i class="fab fa-github"></i>  <i class="fab fa-discord"></i>
+            <div class="admin-tools">
+                <button class="btn-tool" onclick="backupData()">Backup Data (JSON)</button>
+                <button class="btn-tool" onclick="document.getElementById('file-restore').click()">Restore Data</button>
+                <input type="file" id="file-restore" style="display: none;" accept=".json" onchange="restoreData(event)">
             </div>
-        </footer>
+
+            <h3 id="form-title">Tambah Produk Baru</h3>
+            <div class="admin-form">
+                <input type="text" id="product-name" placeholder="Nama Produk">
+                <div class="form-row">
+                    <input type="text" id="product-category" placeholder="Kategori (Misal: Script)">
+                    <input type="number" id="product-price" placeholder="Harga Jual (Wajib)">
+                </div>
+                <input type="number" id="product-original-price" placeholder="Harga Asli Sebelum Diskon (Opsional)">
+                <input type="text" id="product-image" placeholder="URL Gambar (Opsional)">
+                <textarea id="product-desc" placeholder="Deskripsi produk selengkapnya..."></textarea>
+                <button class="btn-add" id="btn-submit-product" onclick="saveProduct()">Tambahkan Produk</button>
+            </div>
+
+            <h3>Kelola Produk</h3>
+            <div class="admin-table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nama</th>
+                            <th>Kategori</th>
+                            <th>Harga Jual</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-table-body"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
-            }
-        }
-    </script>
+    <div class="toast-container" id="toast-container"></div>
 
-    <script type="module">
-        import * as THREE from 'three';
+    <div class="floating-cart" id="floating-cart" onclick="openCartModal()" style="display: none;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+        </svg>
+        <div class="cart-badge" id="cart-badge-count">0</div>
+    </div>
 
-        // Setup Scene, Camera, Renderer
-        const canvas = document.getElementById('bg-canvas');
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x050510, 0.008);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 2, 8);
-        
-        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        
-        // Particle System - Efek Nebula Interaktif
-        const particlesGeometry = new THREE.BufferGeometry();
-        const particlesCount = 1800;
-        const posArray = new Float32Array(particlesCount * 3);
-        for(let i = 0; i < particlesCount * 3; i += 3) {
-            posArray[i] = (Math.random() - 0.5) * 30;
-            posArray[i+1] = (Math.random() - 0.5) * 15;
-            posArray[i+2] = (Math.random() - 0.5) * 20 - 10;
-        }
-        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-        
-        const particlesMaterial = new THREE.PointsMaterial({
-            color: 0xff3366,
-            size: 0.08,
-            transparent: true,
-            blending: THREE.AdditiveBlending
-        });
-        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
-        scene.add(particlesMesh);
-        
-        // Tambahan titik-titik berwarna cyan
-        const particlesGeometry2 = new THREE.BufferGeometry();
-        const posArray2 = new Float32Array(1200 * 3);
-        for(let i = 0; i < 1200 * 3; i += 3) {
-            posArray2[i] = (Math.random() - 0.5) * 25;
-            posArray2[i+1] = (Math.random() - 0.5) * 12;
-            posArray2[i+2] = (Math.random() - 0.5) * 18 - 5;
-        }
-        particlesGeometry2.setAttribute('position', new THREE.BufferAttribute(posArray2, 3));
-        const particlesMaterial2 = new THREE.PointsMaterial({
-            color: 0x33ffcc,
-            size: 0.06,
-            transparent: true,
-            blending: THREE.AdditiveBlending
-        });
-        const particlesMesh2 = new THREE.Points(particlesGeometry2, particlesMaterial2);
-        scene.add(particlesMesh2);
-        
-        // Torus Knot Futuristik
-        const torusKnotGeo = new THREE.TorusKnotGeometry(1.2, 0.28, 200, 32, 3, 4);
-        const torusMat = new THREE.MeshStandardMaterial({ color: 0xff3366, emissive: 0x331122, roughness: 0.2, metalness: 0.8 });
-        const torusKnot = new THREE.Mesh(torusKnotGeo, torusMat);
-        scene.add(torusKnot);
-        
-        // Bola kecil melayang
-        const sphereGeo = new THREE.SphereGeometry(0.5, 32, 32);
-        const sphereMat = new THREE.MeshStandardMaterial({ color: 0x33ffcc, emissive: 0x116655, roughness: 0.3 });
-        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
-        sphere.position.set(1.5, -1, -2);
-        scene.add(sphere);
-        
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0x404060);
-        scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0xff66aa, 1);
-        pointLight.position.set(2, 3, 4);
-        scene.add(pointLight);
-        const pointLight2 = new THREE.PointLight(0x33ffcc, 0.8);
-        pointLight2.position.set(-2, 1, 3);
-        scene.add(pointLight2);
-        
-        // Animate mouse interaction for particles and rotation
-        let mouseX = 0, mouseY = 0;
-        document.addEventListener('mousemove', (event) => {
-            mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-            mouseY = (event.clientY / window.innerHeight) * 2 - 1;
-        });
-        
-        function animate() {
-            requestAnimationFrame(animate);
+    <div id="product-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeProductModal()">&times;</span>
+            <div class="modal-category" id="modal-product-category">KATEGORI</div>
+            <div class="modal-title" id="modal-product-name">Nama Produk</div>
+            <div class="price-container" style="border-bottom: 1px solid #333; padding-bottom: 1rem; margin-bottom: 1rem;">
+                <div id="modal-product-original-price" class="card-price-original" style="display: none;"></div>
+                <div class="card-price" id="modal-product-price" style="font-size: 1.8rem; margin: 0;">Rp 0</div>
+            </div>
+            <div class="modal-desc-full" id="modal-product-desc">Deskripsi lengkap produk...</div>
             
-            // Rotasi dinamis berdasarkan mouse
-            torusKnot.rotation.x += 0.008;
-            torusKnot.rotation.y += 0.012;
-            torusKnot.rotation.z += 0.005;
-            sphere.rotation.x += 0.01;
-            sphere.rotation.y += 0.015;
-            
-            particlesMesh.rotation.y = mouseX * 0.5;
-            particlesMesh.rotation.x = mouseY * 0.3;
-            particlesMesh2.rotation.y = mouseX * 0.4;
-            particlesMesh2.rotation.x = mouseY * 0.2;
-            
-            camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.05;
-            camera.position.y += (-mouseY * 0.3 - camera.position.y) * 0.05;
-            camera.lookAt(0, 0, 0);
-            
-            renderer.render(scene, camera);
-        }
-        
-        animate();
-        
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
+            <button class="btn-share" onclick="shareProduct()">Bagikan Produk Ini</button>
+            <button class="btn-confirm" id="btn-add-cart" onclick="addToCart()">Tambah ke Keranjang</button>
+        </div>
+    </div>
+
+    <div id="cart-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeCartModal()">&times;</span>
+            <div class="modal-title">Keranjang Belanja</div>
+            <div id="empty-cart-msg" style="color: var(--text-muted); margin: 2rem 0; text-align: center;">Keranjang kamu masih kosong.</div>
+            <div class="cart-item-list" id="cart-item-list"></div>
+            <div id="cart-summary" style="display: none;">
+                <div class="cart-total">Total: <span id="cart-total-price">Rp 0</span></div>
+                <button class="btn-confirm" onclick="checkoutCart()">Checkout via WhatsApp</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="logo" style="font-size: 1.2rem;">Kimjong<span>Store</span></div>
+            <p class="footer-text">&copy; 2026 Kimjong Store. Semua hak cipta dilindungi.</p>
+            <div class="social-links">
+                <a href="#">Telegram</a>
+                <a href="#">WhatsApp</a>
+                <a href="#">Discord</a>
+            </div>
+        </div>
+    </footer>
 
     <script>
-        // GSAP Scroll Animations + Advanced Effects
-        gsap.registerPlugin(ScrollTrigger);
+        // --- KONFIGURASI KEAMANAN ---
+        const ADMIN_PIN = "1234"; // Ganti PIN ini sesuai keinginanmu
         
-        // Fade up animation for all .fade-up elements
-        gsap.utils.toArray('.fade-up').forEach(el => {
-            gsap.fromTo(el, 
-                { opacity: 0, y: 60 },
-                {
-                    opacity: 1,
-                    y: 0,
-                    duration: 1.2,
-                    ease: "power3.out",
-                    scrollTrigger: {
-                        trigger: el,
-                        start: "top 85%",
-                        toggleActions: "play none none reverse"
-                    }
-                }
-            );
-        });
+        // Data Produk Default
+        const defaultProducts = [
+            { 
+                id: 1, name: "Lisensi Bot Telegram VIP", category: "Bot",
+                originalPrice: 200000, price: 150000,
+                desc: "Lisensi bulanan untuk bot Telegram dengan fitur lengkap termasuk manajemen grup, anti-spam, dan respon otomatis.",
+                image: "https://via.placeholder.com/400x200/1e1e1e/ffd700?text=Bot+Telegram" 
+            },
+            { 
+                id: 2, name: "Source Code Web Marketplace", category: "Script",
+                originalPrice: 350000, price: 250000,
+                desc: "Kode sumber HTML, CSS, JS murni untuk membuat toko online sendiri. Sangat ringan dan mudah diedit.",
+                image: "https://via.placeholder.com/400x200/1e1e1e/ffd700?text=Source+Code" 
+            },
+            { 
+                id: 3, name: "Hosting SSD 1 Bulan", category: "Layanan",
+                originalPrice: null, price: 50000,
+                desc: "Layanan hosting cepat menggunakan penyimpanan NVMe SSD.",
+                image: "" 
+            }
+        ];
+
+        let products = JSON.parse(localStorage.getItem('kimjongStoreData'));
+        if (!products) { products = defaultProducts; saveData(); }
+
+        let cartItems = JSON.parse(localStorage.getItem('kimjongCartData')) || [];
         
-        // Hero title glitch effect with GSAP (continuous)
-        const heroTitle = document.querySelector('.hero h1');
-        if(heroTitle) {
-            gsap.to(heroTitle, {
-                duration: 0.1,
-                repeat: -1,
-                repeatDelay: 3,
-                skewX: "random(-2, 2)",
-                skewY: "random(-1, 1)",
-                yoyo: true,
-                ease: "none"
-            });
+        let isAdminView = false;
+        let selectedProductForModal = null;
+        let editingProductId = null;
+        let activeCategoryFilter = 'Semua';
+
+        // --- SISTEM TOAST NOTIFIKASI ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('hide');
+                setTimeout(() => { toast.remove(); }, 300);
+            }, 3000);
         }
-        
-        // Magnetic 3D Tilt Effect pada Cards (interaktif canggih)
-        const cards = document.querySelectorAll('.product-card');
-        cards.forEach(card => {
-            card.addEventListener('mousemove', (e) => {
-                const rect = card.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                const centerX = rect.width / 2;
-                const centerY = rect.height / 2;
-                const rotateX = (y - centerY) / 20;
-                const rotateY = (centerX - x) / 20;
-                card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
-                card.style.transition = 'transform 0.1s ease-out';
-            });
-            card.addEventListener('mouseleave', () => {
-                card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
-                card.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1)';
-            });
-        });
-        
-        // Custom Cursor Logic with Smooth Following
-        const cursorDot = document.querySelector('.cursor-dot');
-        const cursorOutline = document.querySelector('.cursor-outline');
-        let mousePos = { x: 0, y: 0 };
-        let dotPos = { x: 0, y: 0 };
-        let outlinePos = { x: 0, y: 0 };
-        
-        document.addEventListener('mousemove', (e) => {
-            mousePos.x = e.clientX;
-            mousePos.y = e.clientY;
-        });
-        
-        function animateCursor() {
-            dotPos.x += (mousePos.x - dotPos.x) * 0.2;
-            dotPos.y += (mousePos.y - dotPos.y) * 0.2;
-            outlinePos.x += (mousePos.x - outlinePos.x) * 0.1;
-            outlinePos.y += (mousePos.y - outlinePos.y) * 0.1;
+
+        function saveData() { localStorage.setItem('kimjongStoreData', JSON.stringify(products)); updateDashboardStats(); }
+        function saveCart() { localStorage.setItem('kimjongCartData', JSON.stringify(cartItems)); updateCartUI(); }
+
+        // --- SISTEM DASHBOARD STATS ---
+        function updateDashboardStats() {
+            const totalProducts = products.length;
+            const uniqueCategories = new Set(products.map(p => p.category).filter(c => c && c.trim() !== '')).size;
+            const totalValue = products.reduce((sum, current) => sum + current.price, 0);
+
+            document.getElementById('stat-total-products').textContent = totalProducts;
+            document.getElementById('stat-total-categories').textContent = uniqueCategories;
+            document.getElementById('stat-total-value').textContent = formatRupiah(totalValue);
+        }
+
+        // --- SISTEM BACKUP & RESTORE ---
+        function backupData() {
+            const dataStr = JSON.stringify(products, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `KimjongStore_Backup_${new Date().getTime()}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            showToast('Backup berhasil diunduh.', 'success');
+        }
+
+        function restoreData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        products = importedData;
+                        saveData();
+                        renderAdminView();
+                        renderCategoryFilters();
+                        applyFilters();
+                        showToast('Data berhasil direstore!', 'success');
+                    } else {
+                        showToast('Format file JSON tidak valid.', 'danger');
+                    }
+                } catch (err) {
+                    showToast('Gagal membaca file JSON.', 'danger');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // --- SISTEM SHARE NATIVE ---
+        function shareProduct() {
+            if (!selectedProductForModal) return;
             
-            cursorDot.style.transform = `translate(${dotPos.x - 4}px, ${dotPos.y - 4}px)`;
-            cursorOutline.style.transform = `translate(${outlinePos.x - 20}px, ${outlinePos.y - 20}px)`;
-            requestAnimationFrame(animateCursor);
+            const shareData = {
+                title: `Kimjong Store - ${selectedProductForModal.name}`,
+                text: `Cek produk ini di Kimjong Store: ${selectedProductForModal.name} seharga ${formatRupiah(selectedProductForModal.price)}.\n\nDetail: ${selectedProductForModal.desc}`,
+                url: window.location.href // Bagikan URL toko saat ini
+            };
+
+            if (navigator.share) {
+                navigator.share(shareData)
+                    .then(() => showToast('Produk berhasil dibagikan!', 'success'))
+                    .catch((error) => console.log('Error sharing', error));
+            } else {
+                // Fallback jika browser tidak mendukung Web Share API
+                navigator.clipboard.writeText(`${shareData.text}\n\nLink: ${shareData.url}`);
+                showToast('Info produk disalin ke clipboard!', 'success');
+            }
         }
-        animateCursor();
-        
-        // Interaktif pada tombol & link mengubah ukuran cursor
-        const interactiveElements = document.querySelectorAll('a, button, .buy-btn, .btn-glow');
-        interactiveElements.forEach(el => {
-            el.addEventListener('mouseenter', () => {
-                cursorOutline.style.width = '70px';
-                cursorOutline.style.height = '70px';
-                cursorOutline.style.borderColor = '#33ffcc';
-                cursorDot.style.backgroundColor = '#33ffcc';
+
+        const formatRupiah = (number) => { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(number); };
+
+        function updateCartUI() {
+            const floatingCart = document.getElementById('floating-cart');
+            const cartBadge = document.getElementById('cart-badge-count');
+            if (cartItems.length > 0) {
+                floatingCart.style.display = 'flex';
+                cartBadge.textContent = cartItems.length;
+            } else {
+                floatingCart.style.display = 'none';
+            }
+        }
+
+        function renderCategoryFilters() {
+            const filterContainer = document.getElementById('category-filters');
+            const uniqueCategories = [...new Set(products.map(p => p.category).filter(c => c && c.trim() !== ''))];
+            const allCategories = ['Semua', ...uniqueCategories];
+            filterContainer.innerHTML = '';
+            
+            allCategories.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.className = `filter-btn ${activeCategoryFilter === cat ? 'active' : ''}`;
+                btn.textContent = cat;
+                btn.onclick = () => { activeCategoryFilter = cat; renderCategoryFilters(); applyFilters(); };
+                filterContainer.appendChild(btn);
             });
-            el.addEventListener('mouseleave', () => {
-                cursorOutline.style.width = '40px';
-                cursorOutline.style.height = '40px';
-                cursorOutline.style.borderColor = 'rgba(255, 51, 102, 0.6)';
-                cursorDot.style.backgroundColor = '#ff3366';
+        }
+
+        function applyFilters() {
+            const searchBox = document.getElementById('search-input');
+            const keyword = searchBox.value.toLowerCase();
+            const filteredProducts = products.filter(product => {
+                const matchKeyword = product.name.toLowerCase().includes(keyword) || (product.desc && product.desc.toLowerCase().includes(keyword));
+                const matchCategory = activeCategoryFilter === 'Semua' || product.category === activeCategoryFilter;
+                return matchKeyword && matchCategory;
             });
-        });
-        
-        // Efek Khusus: Particle Burst saat mengklik tombol "Beli Sekarang"
-        const buyButtons = document.querySelectorAll('.buy-btn');
-        function createParticleBurst(x, y) {
-            for(let i = 0; i < 20; i++) {
-                const particle = document.createElement('div');
-                particle.style.position = 'fixed';
-                particle.style.width = '6px';
-                particle.style.height = '6px';
-                particle.style.background = `radial-gradient(circle, #ff3366, #33ffcc)`;
-                particle.style.borderRadius = '50%';
-                particle.style.left = x + 'px';
-                particle.style.top = y + 'px';
-                particle.style.pointerEvents = 'none';
-                particle.style.zIndex = '9999';
-                document.body.appendChild(particle);
-                
-                const angle = Math.random() * Math.PI * 2;
-                const velocity = 3 + Math.random() * 6;
-                const vx = Math.cos(angle) * velocity;
-                const vy = Math.sin(angle) * velocity;
-                let opacity = 1;
-                let posX = x, posY = y;
-                
-                function animateParticle() {
-                    posX += vx;
-                    posY += vy;
-                    opacity -= 0.02;
-                    particle.style.left = posX + 'px';
-                    particle.style.top = posY + 'px';
-                    particle.style.opacity = opacity;
-                    if(opacity <= 0) {
-                        particle.remove();
-                        return;
-                    }
-                    requestAnimationFrame(animateParticle);
+            renderUserView(filteredProducts);
+        }
+
+        function renderUserView(productsToDisplay = products) {
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = '';
+            if (productsToDisplay.length === 0) {
+                grid.innerHTML = '<div class="empty-state">Produk tidak ditemukan.</div>';
+                return;
+            }
+
+            productsToDisplay.forEach(product => {
+                const imageContent = product.image && product.image.trim() !== '' ? `<img src="${product.image}" alt="${product.name}">` : `[ Gambar ${product.name} ]`;
+                const badge = product.category && product.category.trim() !== '' ? `<div class="card-category-badge">${product.category}</div>` : '';
+                const shortDesc = product.desc ? product.desc : 'Tidak ada deskripsi.';
+
+                let priceHTML = '';
+                if (product.originalPrice && product.originalPrice > product.price) {
+                    priceHTML = `<div class="card-price-original">${formatRupiah(product.originalPrice)}</div>`;
                 }
-                animateParticle();
+                priceHTML += `<div class="card-price">${formatRupiah(product.price)}</div>`;
+
+                grid.innerHTML += `
+                    <div class="card">
+                        <div class="card-img">${badge}${imageContent}</div>
+                        <div class="card-content">
+                            <div class="card-title">${product.name}</div>
+                            <div class="card-desc-short">${shortDesc}</div>
+                            <div class="price-container">${priceHTML}</div>
+                            <button class="btn-buy" onclick="openProductModal(${product.id})">Lihat Detail</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderAdminView() {
+            const tbody = document.getElementById('admin-table-body');
+            tbody.innerHTML = '';
+            products.forEach(product => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${product.name}</td>
+                        <td>${product.category || '-'}</td>
+                        <td>${formatRupiah(product.price)}</td>
+                        <td class="action-buttons">
+                            <button class="btn-edit" onclick="editProduct(${product.id})">Edit</button>
+                            <button class="btn-delete" onclick="deleteProduct(${product.id})">Hapus</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            updateDashboardStats();
+        }
+
+        function editProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (product) {
+                document.getElementById('product-name').value = product.name;
+                document.getElementById('product-category').value = product.category || '';
+                document.getElementById('product-price').value = product.price;
+                document.getElementById('product-original-price').value = product.originalPrice || '';
+                document.getElementById('product-image').value = product.image || '';
+                document.getElementById('product-desc').value = product.desc || '';
+                
+                editingProductId = id;
+                document.getElementById('form-title').textContent = 'Edit Produk: ' + product.name;
+                const submitBtn = document.getElementById('btn-submit-product');
+                submitBtn.textContent = 'Simpan Perubahan';
+                submitBtn.style.backgroundColor = 'var(--warning)';
+                submitBtn.style.color = 'var(--bg-color)';
+                document.querySelector('.admin-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
-        
-        buyButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const rect = btn.getBoundingClientRect();
-                const x = rect.left + rect.width / 2;
-                const y = rect.top + rect.height / 2;
-                createParticleBurst(x, y);
-                // Notifikasi sederhana (demo)
-                const toast = document.createElement('div');
-                toast.innerText = '✨ Item ditambahkan ke keranjang! ✨';
-                toast.style.position = 'fixed';
-                toast.style.bottom = '20px';
-                toast.style.right = '20px';
-                toast.style.background = 'rgba(0,0,0,0.8)';
-                toast.style.backdropFilter = 'blur(12px)';
-                toast.style.padding = '12px 24px';
-                toast.style.borderRadius = '50px';
-                toast.style.borderLeft = '4px solid #ff3366';
-                toast.style.color = 'white';
-                toast.style.fontWeight = 'bold';
-                toast.style.zIndex = '10000';
-                toast.style.animation = 'fadeInOut 2s ease forwards';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 2000);
-            });
-        });
-        
-        // Animasi fade in out untuk toast
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes fadeInOut {
-                0% { opacity: 0; transform: translateY(20px);}
-                15% { opacity: 1; transform: translateY(0);}
-                85% { opacity: 1; transform: translateY(0);}
-                100% { opacity: 0; transform: translateY(-20px);}
+
+        function saveProduct() {
+            const nameInput = document.getElementById('product-name').value.trim();
+            const catInput = document.getElementById('product-category').value.trim();
+            const priceInput = document.getElementById('product-price').value;
+            const originalPriceInput = document.getElementById('product-original-price').value;
+            const imageInput = document.getElementById('product-image').value.trim();
+            const descInput = document.getElementById('product-desc').value.trim();
+            
+            if (nameInput === '' || priceInput === '') {
+                showToast('Nama dan harga jual wajib diisi.', 'danger');
+                return;
             }
-        `;
-        document.head.appendChild(style);
-        
-        // Tombol Explore smooth scroll
-        document.getElementById('exploreBtn').addEventListener('click', () => {
-            document.getElementById('products').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-        
-        // Efek unik: parallax pada floating shape
-        window.addEventListener('scroll', () => {
-            const scrollY = window.scrollY;
-            const shapes = document.querySelectorAll('.floating-shape');
-            shapes.forEach((shape, idx) => {
-                const speed = 0.2 + idx * 0.1;
-                shape.style.transform = `translateY(${scrollY * speed}px)`;
+
+            const finalPrice = parseInt(priceInput);
+            const finalOriginalPrice = originalPriceInput ? parseInt(originalPriceInput) : null;
+
+            if (editingProductId !== null) {
+                const index = products.findIndex(p => p.id === editingProductId);
+                if (index !== -1) {
+                    products[index] = { ...products[index], name: nameInput, category: catInput, price: finalPrice, originalPrice: finalOriginalPrice, image: imageInput, desc: descInput };
+                }
+                editingProductId = null;
+                document.getElementById('form-title').textContent = 'Tambah Produk Baru';
+                const submitBtn = document.getElementById('btn-submit-product');
+                submitBtn.textContent = 'Tambahkan Produk';
+                submitBtn.style.backgroundColor = 'var(--accent-color)';
+                showToast('Perubahan berhasil disimpan!', 'success');
+            } else {
+                const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+                products.push({ id: newId, name: nameInput, category: catInput, price: finalPrice, originalPrice: finalOriginalPrice, image: imageInput, desc: descInput });
+                showToast('Produk baru berhasil ditambahkan!', 'success');
+            }
+
+            saveData();
+            document.getElementById('product-name').value = '';
+            document.getElementById('product-category').value = '';
+            document.getElementById('product-price').value = '';
+            document.getElementById('product-original-price').value = '';
+            document.getElementById('product-image').value = '';
+            document.getElementById('product-desc').value = '';
+            
+            renderAdminView();
+            renderCategoryFilters();
+            applyFilters();
+        }
+
+        function deleteProduct(id) {
+            products = products.filter(product => product.id !== id);
+            saveData();
+            renderAdminView();
+            renderCategoryFilters();
+            applyFilters();
+            showToast('Produk berhasil dihapus.', 'danger');
+        }
+
+        // --- Logika Modal & Keranjang ---
+        function openProductModal(productId) {
+            const product = products.find(p => p.id === productId);
+            if (product) {
+                selectedProductForModal = product;
+                document.getElementById('modal-product-category').textContent = product.category || 'PRODUK';
+                document.getElementById('modal-product-name').textContent = product.name;
+                document.getElementById('modal-product-price').textContent = formatRupiah(product.price);
+                document.getElementById('modal-product-desc').textContent = product.desc || 'Tidak ada deskripsi rinci untuk produk ini.';
+                
+                const originalPriceEl = document.getElementById('modal-product-original-price');
+                if (product.originalPrice && product.originalPrice > product.price) {
+                    originalPriceEl.textContent = formatRupiah(product.originalPrice);
+                    originalPriceEl.style.display = 'block';
+                } else {
+                    originalPriceEl.style.display = 'none';
+                }
+                document.getElementById('product-modal').style.display = 'flex';
+            }
+        }
+
+        function closeProductModal() { document.getElementById('product-modal').style.display = 'none'; selectedProductForModal = null; }
+
+        function addToCart() {
+            if (!selectedProductForModal) return;
+            const cartItem = { cartId: Date.now(), ...selectedProductForModal };
+            cartItems.push(cartItem);
+            saveCart();
+            closeProductModal();
+            showToast('Sukses ditambahkan ke keranjang!', 'success');
+        }
+
+        function openCartModal() {
+            const cartList = document.getElementById('cart-item-list');
+            const emptyMsg = document.getElementById('empty-cart-msg');
+            const cartSummary = document.getElementById('cart-summary');
+            const cartTotalPrice = document.getElementById('cart-total-price');
+            
+            cartList.innerHTML = '';
+            let total = 0;
+
+            if (cartItems.length === 0) {
+                emptyMsg.style.display = 'block';
+                cartSummary.style.display = 'none';
+            } else {
+                emptyMsg.style.display = 'none';
+                cartSummary.style.display = 'block';
+                cartItems.forEach(item => {
+                    total += item.price;
+                    cartList.innerHTML += `
+                        <div class="cart-item">
+                            <div class="cart-item-info">
+                                <div class="cart-item-name">${item.name}</div>
+                                <div class="cart-item-price">${formatRupiah(item.price)}</div>
+                            </div>
+                            <button class="btn-remove-item" onclick="removeFromCart(${item.cartId})">Hapus</button>
+                        </div>
+                    `;
+                });
+                cartTotalPrice.textContent = formatRupiah(total);
+            }
+            document.getElementById('cart-modal').style.display = 'flex';
+        }
+
+        function closeCartModal() { document.getElementById('cart-modal').style.display = 'none'; }
+        function removeFromCart(cartId) {
+            cartItems = cartItems.filter(item => item.cartId !== cartId);
+            saveCart(); openCartModal(); showToast('Barang dihapus dari keranjang', 'warning');
+        }
+
+        function checkoutCart() {
+            if (cartItems.length === 0) return;
+            // --- GANTI NOMOR INI DENGAN NOMOR WA KAMU ---
+            const noWA = "6281234567890"; 
+            let pesan = `Halo Admin Kimjong Store, saya ingin memesan barang-barang berikut:%0A%0A`;
+            let total = 0;
+            cartItems.forEach((item, index) => {
+                pesan += `${index + 1}. ${item.name} - ${formatRupiah(item.price)}%0A`;
+                total += item.price;
             });
-        });
+            pesan += `%0A*Total Belanja:* ${formatRupiah(total)}%0A%0AMohon panduan untuk pembayarannya. Terima kasih!`;
+            const waLink = `https://wa.me/${noWA}?text=${pesan}`;
+            window.open(waLink, '_blank');
+        }
+
+        window.onclick = function(event) {
+            const pModal = document.getElementById('product-modal');
+            const cModal = document.getElementById('cart-modal');
+            if (event.target == pModal) closeProductModal();
+            if (event.target == cModal) closeCartModal();
+        }
+
+        // --- LOGIKA KEAMANAN ADMIN ---
+        function toggleView() {
+            const userView = document.getElementById('user-view');
+            const adminPanel = document.getElementById('admin-panel');
+            const toggleBtn = document.getElementById('toggle-view-btn');
+            const floatingCart = document.getElementById('floating-cart');
+
+            if (!isAdminView) {
+                // Meminta PIN saat mau masuk mode admin
+                const inputPin = prompt("Masukkan PIN Admin untuk mengelola toko:");
+                if (inputPin === null) return; // User menekan cancel
+                
+                if (inputPin !== ADMIN_PIN) {
+                    showToast('PIN salah! Akses ditolak.', 'danger');
+                    return;
+                }
+                
+                // Jika PIN Benar
+                isAdminView = true;
+                userView.style.display = 'none';
+                adminPanel.style.display = 'block';
+                floatingCart.style.display = 'none';
+                toggleBtn.textContent = 'Tutup Admin';
+                toggleBtn.style.backgroundColor = 'var(--danger)';
+                toggleBtn.style.color = 'white';
+                toggleBtn.style.borderColor = 'var(--danger)';
+                showToast('Selamat datang di Panel Admin', 'success');
+                updateDashboardStats();
+            } else {
+                // Keluar dari mode admin (tidak perlu PIN)
+                isAdminView = false;
+                userView.style.display = 'block';
+                adminPanel.style.display = 'none';
+                updateCartUI();
+                toggleBtn.textContent = 'Mode Admin';
+                toggleBtn.style.backgroundColor = 'transparent';
+                toggleBtn.style.color = 'var(--accent-color)';
+                toggleBtn.style.borderColor = 'var(--accent-color)';
+                applyFilters();
+            }
+        }
+
+        // Inisialisasi awal
+        renderCategoryFilters();
+        renderUserView();
+        renderAdminView();
+        updateCartUI();
     </script>
 </body>
 </html>
