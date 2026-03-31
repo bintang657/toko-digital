@@ -1,1934 +1,1435 @@
 --[[
-    Script KimJong v2.2 - Fish It
-    Fixed for Delta Mobile Executor
-    Educational purpose only
+    Script KimJong v2.0
+    Untuk game Roblox: Fish It
+    Educational purposes only.
+
+    Fitur lengkap dengan anti-detection modern.
+    Dapat dijalankan di executor seperti Synapse X, Fluxus, Delta, dll.
+
+    Catatan: Beberapa fitur mungkin memerlukan penyesuaian jika game update.
+    Gunakan dengan bijak.
 --]]
 
-local KIMJONG_LOADED = false
+-- [[ KONFIGURASI AWAL ]]
+local ScriptName = "Script KimJong"
+local ScriptVersion = "v2.0"
+local GameName = "Fish It"
 
-local ok, err = pcall(function()
+-- [[ LIBRARY UI: RAYFIELD (jika gagal, buat UI sederhana) ]]
+local RayfieldLoaded = pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Rayfield/main/source.lua"))()
+end)
 
--- ======================================
--- SERVICES (100% safe)
--- ======================================
-local Players = game:GetService("Players")
-local RS = game:GetService("ReplicatedStorage")
-local WS = game:GetService("Workspace")
-local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local StarterGui = game:GetService("StarterGui")
-local Lighting = game:GetService("Lighting")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-
-local LP = Players.LocalPlayer
-if not LP then
-    warn("[KimJong] No LocalPlayer!")
-    return
+if not RayfieldLoaded then
+    -- Fallback UI sederhana jika Rayfield gagal
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "KimJongUI"
+    ScreenGui.Parent = game.CoreGui
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0, 400, 0, 300)
+    Frame.Position = UDim2.new(0.5, -200, 0.5, -150)
+    Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    Frame.BorderSizePixel = 0
+    Frame.Parent = ScreenGui
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1,0,0,30)
+    Title.Text = ScriptName.." "..ScriptVersion
+    Title.TextColor3 = Color3.fromRGB(255,255,255)
+    Title.BackgroundTransparency = 1
+    Title.Parent = Frame
+    -- Notifikasi sederhana
+    print("Rayfield tidak tersedia, menggunakan UI dasar. Beberapa fitur mungkin terbatas.")
 end
 
--- ======================================
--- SAFE EXECUTOR FUNCTION CHECKER
--- Tidak pakai getfenv/setfenv/_ENV
--- ======================================
-local Exec = {}
+-- [[ ANTI-DETECTION MODULE (PRIORITAS) ]]
+local AntiDetect = {}
 
--- Cek satu-satu dengan pcall, TIDAK pakai getfenv
-local function tryGetGlobal(name)
-    local s, r = pcall(function()
-        return ({
-            ["hookmetamethod"] = hookmetamethod,
-            ["hookfunction"] = hookfunction,
-            ["newcclosure"] = newcclosure,
-            ["getnamecallmethod"] = getnamecallmethod,
-            ["getconnections"] = getconnections,
-            ["firesignal"] = firesignal,
-            ["fireproximityprompt"] = fireproximityprompt,
-            ["fireclickdetector"] = fireclickdetector,
-            ["checkcaller"] = checkcaller,
-            ["identifyexecutor"] = identifyexecutor,
-            ["getexecutorname"] = getexecutorname,
-            ["setclipboard"] = setclipboard,
-            ["cloneref"] = cloneref,
-            ["gethui"] = gethui,
-            ["isreadonly"] = isreadonly,
-            ["setreadonly"] = setreadonly,
-            ["request"] = request,
-            ["http_request"] = http_request,
-        })[name]
+-- Hook fungsi kick
+local originalKick = game.Players.LocalPlayer.Kick
+game.Players.LocalPlayer.Kick = function(...)
+    -- Mencegah kick
+    return nil
+end
+
+-- Spoof player position untuk ghost position
+local originalChar = game.Players.LocalPlayer.Character or workspace:WaitForChild(game.Players.LocalPlayer.Name)
+local function updateGhostPosition()
+    task.spawn(function()
+        while wait(0.5) do
+            pcall(function()
+                local char = game.Players.LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    -- Kirim posisi asli ke server? Sebenarnya kita hanya perlu memalsukan posisi yang dikirim
+                    -- Kita akan spoof melalui remote jika ada. Untuk aman, kita tidak mengubah posisi secara drastis.
+                    -- Ghost position: kita akan mengembalikan posisi sebenarnya jika server memeriksa
+                    -- Hook pada remote movement validation.
+                end
+            end)
+        end
     end)
-    if s and r and type(r) == "function" then
-        return r
+end
+
+-- Hook remote events untuk spoof argumen
+local oldNamecall
+if hookmetamethod then
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if method == "FireServer" then
+            -- Intercept remote fire
+            -- Jika remote terkait fishing, modifikasi argumen agar terlihat normal
+            -- Contoh: jika remote bernama "CastRod", tambahkan delay acak
+            if tostring(self) == "CastRod" or tostring(self):find("Cast") then
+                -- Spoof argumen dengan nilai yang wajar
+                -- Tambahkan random delay kecil
+                wait(math.random(1,5)/100)
+                -- Lanjutkan fire
+                return oldNamecall(self, unpack(args))
+            end
+        end
+        return oldNamecall(self, ...)
+    end)
+end
+
+-- Hook getconnections untuk putuskan koneksi anti-cheat
+if getconnections then
+    local connections = getconnections(game.Players.LocalPlayer.Idled)
+    for _, con in pairs(connections) do
+        con:Disable()
+    end
+end
+
+-- Fungsi bypass integrity check
+local function bypassIntegrity()
+    -- Cari dan disable script anti-cheat
+    for _, obj in pairs(game:GetDescendants()) do
+        if obj:IsA("LocalScript") and (obj.Name:lower():find("anticheat") or obj.Name:lower():find("anti-cheat") or obj.Name:lower():find("integrity")) then
+            pcall(function()
+                obj.Disabled = true
+            end)
+        end
+    end
+    -- Spoof heartbeat response
+    local heartbeatRemote = game:GetService("ReplicatedStorage"):FindFirstChild("HeartbeatCheck")
+    if heartbeatRemote then
+        -- Hook FireServer untuk remote ini dan berikan response acak yang valid
+        -- ...
+    end
+end
+
+-- Jalankan bypass integrity di awal
+task.spawn(bypassIntegrity)
+
+-- Fungsi untuk membuat string ter-obfuscate
+local function obf(str)
+    local obfuscated = ""
+    for i=1,#str do
+        obfuscated = obfuscated .. string.char(string.byte(str,i) + math.random(1,5))
+    end
+    return obfuscated
+end
+
+-- Random delay untuk action
+local function randomDelay(min, max)
+    wait(math.random(min*100, max*100)/100)
+end
+
+-- [[ UTILITY FUNCTIONS ]]
+local Utility = {}
+
+-- Fungsi untuk mencari remote event berdasarkan pola nama
+function Utility:FindRemote(pattern)
+    for _, remote in pairs(game:GetDescendants()) do
+        if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+            if remote.Name:lower():find(pattern:lower()) then
+                return remote
+            end
+        end
     end
     return nil
 end
 
--- Load semua yang tersedia
-local execFuncs = {
-    "hookmetamethod", "hookfunction", "newcclosure",
-    "getnamecallmethod", "getconnections", "firesignal",
-    "fireproximityprompt", "fireclickdetector", "checkcaller",
-    "identifyexecutor", "getexecutorname", "setclipboard",
-    "cloneref", "gethui", "isreadonly", "setreadonly",
-    "request", "http_request"
-}
+-- Fungsi untuk mendapatkan karakter player
+function Utility:GetCharacter()
+    return game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
+end
 
-local capCount = 0
-for _, name in ipairs(execFuncs) do
-    Exec[name] = tryGetGlobal(name)
-    if Exec[name] then
-        capCount = capCount + 1
+-- Fungsi untuk mendapatkan Humanoid
+function Utility:GetHumanoid()
+    local char = self:GetCharacter()
+    return char and char:FindFirstChild("Humanoid")
+end
+
+-- Fungsi untuk mendapatkan rod saat ini
+function Utility:GetCurrentRod()
+    -- Implementasi tergantung game, biasanya di PlayerGui atau Backpack
+    local backpack = game.Players.LocalPlayer.Backpack
+    for _, item in pairs(backpack:GetChildren()) do
+        if item:IsA("Tool") and item.Name:lower():find("rod") then
+            return item
+        end
+    end
+    return nil
+end
+
+-- Fungsi untuk mendapatkan semua fishing spots
+function Utility:GetFishingSpots()
+    local spots = {}
+    -- Cari part dengan nama "FishingSpot" atau "WaterZone"
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Part") and (obj.Name:lower():find("fishing") or obj.Name:lower():find("spot") or obj.Name:lower():find("water")) then
+            table.insert(spots, obj)
+        end
+    end
+    return spots
+end
+
+-- Fungsi untuk teleport ke posisi
+function Utility:TeleportTo(position)
+    local char = self:GetCharacter()
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.CFrame = position
     end
 end
 
--- VirtualUser (terpisah karena service)
-local VirtualUser = nil
-pcall(function()
-    VirtualUser = game:GetService("VirtualUser")
-end)
-
--- Executor name
-local execName = "Unknown"
-pcall(function()
-    if Exec.identifyexecutor then
-        execName = Exec.identifyexecutor()
-    elseif Exec.getexecutorname then
-        execName = Exec.getexecutorname()
-    end
-end)
-
-print("[KimJong v2.2] Executor: " .. execName)
-print("[KimJong v2.2] Functions available: " .. capCount)
-
--- ======================================
--- UTILITY FUNCTIONS
--- ======================================
-local Util = {}
-
-function Util.wait(min, max)
-    min = min or 0.1
-    max = max or 0.5
-    task.wait(min + math.random() * (max - min))
-end
-
-function Util.getChar()
-    local s, c = pcall(function()
-        return LP.Character or LP.CharacterAdded:Wait()
-    end)
-    return s and c or nil
-end
-
-function Util.getHumanoid()
-    local c = Util.getChar()
-    return c and c:FindFirstChildOfClass("Humanoid") or nil
-end
-
-function Util.getHRP()
-    local c = Util.getChar()
-    return c and c:FindFirstChild("HumanoidRootPart") or nil
-end
-
-function Util.notify(title, text, dur)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title or "KimJong",
-            Text = text or "",
-            Duration = dur or 3,
+-- Fungsi untuk notifikasi
+function Utility:Notify(title, text, duration)
+    -- Jika Rayfield, gunakan notifikasi Rayfield
+    if RayfieldLoaded and Rayfield:Notify then
+        Rayfield:Notify({
+            Title = title,
+            Content = text,
+            Duration = duration or 5,
         })
-    end)
-end
-
-function Util.teleportTo(cf)
-    local hrp = Util.getHRP()
-    if hrp and typeof(cf) == "CFrame" then
-        pcall(function() hrp.CFrame = cf end)
-        return true
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 5,
+        })
     end
-    return false
 end
 
-function Util.findRemote(keyword, parent)
-    parent = parent or RS
-    local result = nil
-    pcall(function()
-        for _, obj in ipairs(parent:GetDescendants()) do
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) then
-                if string.find(obj.Name:lower(), keyword:lower()) then
-                    result = obj
-                    return
-                end
-            end
-        end
-    end)
-    return result
-end
-
-function Util.fireRemote(remote, ...)
-    if not remote then return false end
-    local s = false
-    pcall(function()
-        Util.wait(0.05, 0.15)
-        if remote:IsA("RemoteEvent") then
-            remote:FireServer(...)
-            s = true
-        elseif remote:IsA("RemoteFunction") then
-            remote:InvokeServer(...)
-            s = true
-        end
-    end)
-    return s
-end
-
-function Util.firePrompt(prompt)
-    if not prompt then return end
-    pcall(function()
-        if Exec.fireproximityprompt then
-            Exec.fireproximityprompt(prompt)
-        else
-            -- Fallback untuk Delta
-            local oldDist = prompt.MaxActivationDistance
-            prompt.MaxActivationDistance = 9999
-            prompt:InputHoldBegin()
-            task.wait(prompt.HoldDuration + 0.1)
-            prompt:InputHoldEnd()
-            task.wait(0.1)
-            prompt.MaxActivationDistance = oldDist
-        end
-    end)
-end
-
-function Util.fireClick(det)
-    if not det then return end
-    pcall(function()
-        if Exec.fireclickdetector then
-            Exec.fireclickdetector(det)
-        end
-    end)
-end
-
--- ======================================
--- ANTI-CHEAT (Safe untuk Delta)
--- ======================================
-local AC = {
-    enabled = true,
-    blocked = {},
-    hooked = false,
-    realSpeed = 16,
-    realJump = 50,
+-- [[ FEATURE VARIABLES ]]
+local Features = {
+    AutoFish = false,
+    AutoPerfectCatch = false,
+    AutoReel = false,
+    InstantFish = false,
+    AutoSell = false,
+    FishESP = false,
+    RareFishNotify = false,
+    AutoEquipBestRod = false,
+    TargetFish = nil,
+    SpeedHack = false,
+    SpeedValue = 16,
+    FlyHack = false,
+    Noclip = false,
+    InfiniteJump = false,
+    AutoFarmRoute = false,
+    InfiniteStamina = false,
+    NoCooldown = false,
+    AntiAFK = false,
+    GodMode = false,
+    InfiniteBait = false,
+    AutoCollectRewards = false,
+    AutoDaily = false,
+    AutoQuest = false,
+    AutoBuyBestRod = false,
+    AutoUpgrade = false,
+    ServerHop = false,
+    Rejoin = false,
+    FPSBooster = false,
+    ScreenshotMode = false,
+    ChatSpam = false,
+    ChatSpamMessage = "Hello!",
+    AntiReport = false,
+    -- ESP
+    PlayerESP = false,
+    ItemESP = false,
+    NPCChestESP = false,
+    Fullbright = false,
+    NoFog = false,
+    NoWaterEffect = false,
+    CustomFOV = false,
+    FOVValue = 70,
+    -- Movement teleport
+    TeleportLocations = {
+        FishingSpots = {},
+        Shop = nil,
+        SellArea = nil,
+        EventArea = nil,
+        SecretSpots = {}
+    }
 }
 
-function AC.init()
-    -- Scan anti-cheat remotes
-    pcall(function()
-        for _, obj in ipairs(RS:GetDescendants()) do
-            pcall(function()
-                if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                    local n = obj.Name:lower()
-                    if string.find(n, "anti") or string.find(n, "cheat") or
-                       string.find(n, "detect") or string.find(n, "security") or
-                       string.find(n, "integrity") or string.find(n, "report") or
-                       string.find(n, "valid") then
-                        AC.blocked[obj.Name] = true
-                    end
-                end
-            end)
-        end
-    end)
+-- [[ FEATURE IMPLEMENTATIONS ]]
 
-    -- Hook namecall ONLY jika tersedia
-    if Exec.hookmetamethod and Exec.getnamecallmethod then
+-- 1. Auto Fish
+local autoFishCoroutine = nil
+local function autoFishLoop()
+    while Features.AutoFish do
         pcall(function()
-            local oldNC
-            oldNC = Exec.hookmetamethod(game, "__namecall",
-                (Exec.newcclosure or function(f) return f end)(function(self, ...)
-                    local method = Exec.getnamecallmethod()
-
-                    -- Block kick
-                    if method == "Kick" and AC.enabled then
-                        return
-                    end
-
-                    -- Block AC remotes
-                    if method == "FireServer" or method == "InvokeServer" then
-                        local rn = ""
-                        pcall(function() rn = self.Name end)
-                        if AC.blocked[rn] then
-                            return
-                        end
-                    end
-
-                    return oldNC(self, ...)
-                end)
-            )
-            AC.hooked = true
-        end)
-    end
-
-    local blockedCount = 0
-    for _ in pairs(AC.blocked) do blockedCount = blockedCount + 1 end
-    print("[KimJong] AC blocked remotes: " .. blockedCount)
-    print("[KimJong] Hooks installed: " .. tostring(AC.hooked))
-end
-
--- ======================================
--- GAME DATA SCANNER
--- ======================================
-local GD = {
-    remotes = {},
-    spots = {},
-    shop = nil,
-    sell = nil,
-    event = nil,
-    secrets = {},
-    spawn = nil,
-    npcs = {},
-    chests = {},
-}
-
-function GD.scan()
-    print("[KimJong] Scanning game...")
-
-    -- Scan semua remote di RS
-    pcall(function()
-        local keywords = {
-            cast = {"cast", "throw", "fish", "rod", "start", "mulai", "lempar", "mancing"},
-            catch = {"catch", "hook", "tangkap", "complete", "finish", "hasil"},
-            reel = {"reel", "pull", "tarik", "drag"},
-            sell = {"sell", "jual", "vendor"},
-            buy = {"buy", "beli", "purchase", "shop", "toko"},
-            equip = {"equip", "pakai", "select", "use", "wear"},
-            collect = {"collect", "claim", "reward", "ambil", "hadiah", "pickup"},
-            quest = {"quest", "mission", "misi", "task", "tugas"},
-            bait = {"bait", "umpan", "lure"},
-            upgrade = {"upgrade", "tingkat", "enhance", "level"},
-        }
-
-        -- Scan RS and subfolders
-        for _, obj in ipairs(RS:GetDescendants()) do
-            pcall(function()
-                if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and
-                   not AC.blocked[obj.Name] then
-                    local n = obj.Name:lower()
-                    for cat, kws in pairs(keywords) do
-                        if not GD.remotes[cat] then
-                            for _, kw in ipairs(kws) do
-                                if string.find(n, kw) then
-                                    GD.remotes[cat] = obj
-                                    print("  Remote [" .. cat .. "]: " .. obj.Name)
-                                    break
-                                end
-                            end
-                        end
-                        if GD.remotes[cat] then break end
-                    end
-                end
-            end)
-        end
-    end)
-
-    -- Scan workspace
-    pcall(function()
-        for _, obj in ipairs(WS:GetDescendants()) do
-            pcall(function()
-                local n = obj.Name:lower()
-
-                -- Fishing spots
-                if obj:IsA("Model") or obj:IsA("BasePart") then
-                    if (string.find(n, "fish") and (string.find(n, "spot") or string.find(n, "zone") or string.find(n, "area")))
-                       or string.find(n, "mancing") or string.find(n, "pancing")
-                       or string.find(n, "castzone") then
-                        table.insert(GD.spots, obj)
-                    end
-                end
-
-                -- Shop
-                if not GD.shop and (obj:IsA("Model") or obj:IsA("BasePart")) then
-                    if string.find(n, "shop") or string.find(n, "toko") or string.find(n, "store") then
-                        GD.shop = obj
-                    end
-                end
-
-                -- Sell
-                if not GD.sell and (obj:IsA("Model") or obj:IsA("BasePart")) then
-                    if string.find(n, "sell") or string.find(n, "jual") then
-                        GD.sell = obj
-                    end
-                end
-
-                -- Event
-                if not GD.event and (obj:IsA("Model") or obj:IsA("BasePart")) then
-                    if string.find(n, "event") then
-                        GD.event = obj
-                    end
-                end
-
-                -- Secrets
-                if (string.find(n, "secret") or string.find(n, "hidden") or string.find(n, "rahasia")) then
-                    if obj:IsA("Model") or obj:IsA("BasePart") then
-                        table.insert(GD.secrets, obj)
-                    end
-                end
-
-                -- NPCs
-                if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
-                    local isP = false
-                    for _, p in ipairs(Players:GetPlayers()) do
-                        if p.Character == obj then isP = true; break end
-                    end
-                    if not isP and obj ~= LP.Character then
-                        table.insert(GD.npcs, obj)
-                    end
-                end
-
-                -- Chests
-                if (string.find(n, "chest") or string.find(n, "treasure") or
-                    string.find(n, "crate") or string.find(n, "peti")) then
-                    if obj:IsA("Model") or obj:IsA("BasePart") then
-                        table.insert(GD.chests, obj)
-                    end
-                end
-            end)
-        end
-
-        -- Spawn
-        pcall(function()
-            GD.spawn = WS:FindFirstChild("SpawnLocation") or WS:FindFirstChild("Spawn")
-        end)
-    end)
-
-    local rc = 0
-    for _ in pairs(GD.remotes) do rc = rc + 1 end
-    print("[KimJong] Scan done: " .. rc .. " remotes, " ..
-          #GD.spots .. " spots, " .. #GD.npcs .. " NPCs, " ..
-          #GD.chests .. " chests")
-end
-
--- ======================================
--- STATES & CONNECTIONS
--- ======================================
-local S = {} -- States (all false by default)
-local C = {} -- Connections
-
-local function addC(name, conn)
-    if C[name] then pcall(function() C[name]:Disconnect() end) end
-    C[name] = conn
-end
-
-local function remC(name)
-    if C[name] then pcall(function() C[name]:Disconnect() end); C[name] = nil end
-end
-
--- ======================================
--- ESP SYSTEM
--- ======================================
-local ESP = {fish={}, player={}, item={}, npc={}, chest={}}
-
-local function makeESP(obj, color, text, cat)
-    pcall(function()
-        local target = obj
-        if obj:IsA("Model") then
-            target = obj.PrimaryPart
-                or obj:FindFirstChild("HumanoidRootPart")
-                or obj:FindFirstChildWhichIsA("BasePart")
-        end
-        if not target or not target:IsA("BasePart") then return end
-
-        local bb = Instance.new("BillboardGui")
-        bb.Name = "_kjesp"
-        bb.AlwaysOnTop = true
-        bb.Size = UDim2.new(0, 180, 0, 40)
-        bb.StudsOffset = Vector3.new(0, 3, 0)
-        bb.Adornee = target
-        bb.Parent = target
-
-        local tl = Instance.new("TextLabel")
-        tl.BackgroundTransparency = 0.4
-        tl.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        tl.Size = UDim2.new(1, 0, 1, 0)
-        tl.Text = text
-        tl.TextColor3 = color
-        tl.TextScaled = true
-        tl.Font = Enum.Font.GothamBold
-        tl.Parent = bb
-
-        pcall(function()
-            Instance.new("UICorner", tl).CornerRadius = UDim.new(0, 4)
-        end)
-
-        local hl = Instance.new("Highlight")
-        hl.Name = "_kjhl"
-        hl.FillColor = color
-        hl.FillTransparency = 0.7
-        hl.OutlineColor = color
-        hl.OutlineTransparency = 0.3
-        hl.Parent = obj
-
-        table.insert(ESP[cat], {bb=bb, hl=hl})
-    end)
-end
-
-local function clearESP(cat)
-    if not ESP[cat] then return end
-    for _, d in ipairs(ESP[cat]) do
-        pcall(function() d.bb:Destroy() end)
-        pcall(function() d.hl:Destroy() end)
-    end
-    ESP[cat] = {}
-end
-
--- ======================================
--- FEATURES
--- ======================================
-local F = {}
-
--- AUTO FISH
-function F.autoFish(on)
-    S.autoFish = on
-    Util.notify("Auto Fish", on and "ON" or "OFF", 2)
-    if not on then return end
-
-    task.spawn(function()
-        while S.autoFish do
-            pcall(function()
-                local castR = GD.remotes.cast
-                local catchR = GD.remotes.catch or GD.remotes.reel
-
-                if castR then
-                    Util.fireRemote(castR)
-                    Util.wait(0.8, 2.0)
-                    Util.wait(1.0, 3.0)
-
-                    if catchR then
-                        if S.autoPerfect then
-                            Util.fireRemote(catchR, "Perfect", 1, true)
-                        else
-                            Util.fireRemote(catchR)
-                        end
-                        Util.wait(0.3, 0.8)
-                    end
-                else
-                    -- Fallback: proximity prompts di fishing spots
-                    local hrp = Util.getHRP()
-                    if hrp then
-                        for _, spot in ipairs(GD.spots) do
-                            pcall(function()
-                                local pos
-                                if spot:IsA("Model") and spot.PrimaryPart then
-                                    pos = spot.PrimaryPart.Position
-                                elseif spot:IsA("Model") then
-                                    pos = spot:GetBoundingBox().Position
-                                elseif spot:IsA("BasePart") then
-                                    pos = spot.Position
-                                end
-
-                                if pos and (hrp.Position - pos).Magnitude < 50 then
-                                    for _, d in ipairs(spot:GetDescendants()) do
-                                        if d:IsA("ProximityPrompt") then
-                                            Util.firePrompt(d)
-                                        elseif d:IsA("ClickDetector") then
-                                            Util.fireClick(d)
-                                        end
-                                    end
-                                end
-                            end)
-                        end
-                    end
-                    Util.wait(2, 4)
-                end
-            end)
-            Util.wait(0.3, 0.8)
-        end
-    end)
-end
-
--- AUTO PERFECT
-function F.autoPerfect(on)
-    S.autoPerfect = on
-    Util.notify("Perfect", on and "ON" or "OFF", 2)
-    if not on then return end
-
-    task.spawn(function()
-        while S.autoPerfect do
-            pcall(function()
-                local pg = LP:FindFirstChild("PlayerGui")
-                if pg then
-                    for _, gui in ipairs(pg:GetDescendants()) do
-                        if (gui:IsA("Frame") or gui:IsA("ImageLabel")) and gui.Visible then
-                            local n = gui.Name:lower()
-                            if string.find(n, "fish") or string.find(n, "catch") or
-                               string.find(n, "reel") or string.find(n, "mini") or
-                               string.find(n, "bar") or string.find(n, "game") then
-                                for _, btn in ipairs(gui:GetDescendants()) do
-                                    if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
-                                        pcall(function()
-                                            Util.wait(0.02, 0.08)
-                                            if Exec.firesignal then
-                                                Exec.firesignal(btn.MouseButton1Click)
-                                            else
-                                                -- Delta fallback
-                                                pcall(function() btn.MouseButton1Click:Fire() end)
-                                            end
-                                        end)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-            task.wait(0.05)
-        end
-    end)
-end
-
--- AUTO REEL
-function F.autoReel(on)
-    S.autoReel = on
-    Util.notify("Auto Reel", on and "ON" or "OFF", 2)
-    if not on then return end
-
-    task.spawn(function()
-        while S.autoReel do
-            pcall(function()
-                local rr = GD.remotes.reel
-                if rr then
-                    local pg = LP:FindFirstChild("PlayerGui")
-                    if pg then
-                        for _, gui in ipairs(pg:GetDescendants()) do
-                            if gui:IsA("Frame") and gui.Visible then
-                                local n = gui.Name:lower()
-                                if string.find(n, "reel") or string.find(n, "bite") or
-                                   string.find(n, "hook") or string.find(n, "alert") then
-                                    Util.wait(0.05, 0.15)
-                                    Util.fireRemote(rr, true)
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-            Util.wait(0.08, 0.15)
-        end
-    end)
-end
-
--- INSTANT FISH
-function F.instantFish(on)
-    S.instantFish = on
-    Util.notify("Instant Fish", on and "ON ⚠️" or "OFF", 2)
-    if not on then return end
-
-    task.spawn(function()
-        while S.instantFish do
-            pcall(function()
-                if GD.remotes.cast and (GD.remotes.catch or GD.remotes.reel) then
-                    Util.fireRemote(GD.remotes.cast)
-                    Util.wait(0.05, 0.1)
-                    Util.fireRemote(GD.remotes.catch or GD.remotes.reel, "Perfect", 1, true)
-                end
-            end)
-            Util.wait(0.3, 0.7)
-        end
-    end)
-end
-
--- AUTO SELL
-function F.autoSell(on)
-    S.autoSell = on
-    Util.notify("Auto Sell", on and "ON" or "OFF", 2)
-    if not on then return end
-
-    task.spawn(function()
-        while S.autoSell do
-            pcall(function()
-                if GD.remotes.sell then
-                    Util.fireRemote(GD.remotes.sell, "All")
-                else
-                    -- TP ke sell area dan interact
-                    if GD.sell then
-                        local hrp = Util.getHRP()
-                        if hrp then
-                            local cf
-                            if GD.sell:IsA("Model") then
-                                cf = GD.sell:GetBoundingBox()
-                            elseif GD.sell:IsA("BasePart") then
-                                cf = GD.sell.CFrame
-                            end
-                            if cf then
-                                if (hrp.Position - cf.Position).Magnitude > 15 then
-                                    Util.teleportTo(cf + Vector3.new(0, 3, 0))
-                                    Util.wait(0.5, 1)
-                                end
-                                for _, d in ipairs(GD.sell:GetDescendants()) do
-                                    if d:IsA("ProximityPrompt") then Util.firePrompt(d)
-                                    elseif d:IsA("ClickDetector") then Util.fireClick(d) end
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-            Util.wait(10, 20)
-        end
-    end)
-end
-
--- FISH ESP
-function F.fishESP(on)
-    S.fishESP = on
-    if not on then clearESP("fish"); Util.notify("Fish ESP", "OFF", 2); return end
-    Util.notify("Fish ESP", "ON", 2)
-
-    task.spawn(function()
-        while S.fishESP do
-            clearESP("fish")
-            pcall(function()
-                local folders = {"Fish", "Fishes", "FishModels", "Ocean", "Water", "Sea", "Ikan", "Spawns"}
-                local searched = {}
-
-                for _, fn in ipairs(folders) do
-                    local f = WS:FindFirstChild(fn)
-                    if f then searched[f] = true
-                        for _, obj in ipairs(f:GetDescendants()) do
-                            pcall(function()
-                                if (obj:IsA("Model") or obj:IsA("MeshPart") or obj:IsA("Part")) then
-                                    local n = obj.Name:lower()
-                                    if string.find(n, "fish") or string.find(n, "ikan") or
-                                       string.find(n, "catch") then
-                                        local rarity = "Common"
-                                        local col = Color3.fromRGB(200, 200, 200)
-                                        if string.find(n, "legend") or string.find(n, "mythic") then
-                                            rarity = "LEGEND"; col = Color3.fromRGB(255, 215, 0)
-                                            if S.rareNotify then Util.notify("🐟 LEGEND!", obj.Name, 5) end
-                                        elseif string.find(n, "epic") then
-                                            rarity = "Epic"; col = Color3.fromRGB(163, 53, 238)
-                                        elseif string.find(n, "rare") or string.find(n, "langka") then
-                                            rarity = "Rare"; col = Color3.fromRGB(0, 112, 255)
-                                        elseif string.find(n, "uncommon") then
-                                            rarity = "Uncommon"; col = Color3.fromRGB(0, 255, 0)
-                                        end
-                                        makeESP(obj, col, obj.Name .. " [" .. rarity .. "]", "fish")
-                                    end
-                                end
-                            end)
-                        end
-                    end
-                end
-            end)
-            task.wait(2)
-        end
-        clearESP("fish")
-    end)
-end
-
--- RARE NOTIFY
-function F.rareNotify(on)
-    S.rareNotify = on
-    Util.notify("Rare Alert", on and "ON" or "OFF", 2)
-end
-
--- AUTO EQUIP ROD
-function F.autoEquip(on)
-    S.autoEquip = on
-    Util.notify("Auto Equip", on and "ON" or "OFF", 2)
-    if not on then return end
-
-    task.spawn(function()
-        while S.autoEquip do
-            pcall(function()
-                if GD.remotes.equip then
-                    Util.fireRemote(GD.remotes.equip, "Best")
-                end
-                local bp = LP:FindFirstChild("Backpack")
-                if bp then
-                    local best, bestV = nil, 0
-                    local vals = {
-                        legend=100, diamond=80, gold=70, platinum=60,
-                        titanium=50, steel=30, iron=20, wood=5, basic=3
-                    }
-                    for _, t in ipairs(bp:GetChildren()) do
-                        if t:IsA("Tool") then
-                            local tn = t.Name:lower()
-                            if string.find(tn, "rod") or string.find(tn, "pole") or
-                               string.find(tn, "pancing") or string.find(tn, "fish") then
-                                local v = 1
-                                for kw, val in pairs(vals) do
-                                    if string.find(tn, kw) then v = val; break end
-                                end
-                                if v > bestV then bestV = v; best = t end
-                            end
-                        end
-                    end
-                    if best then
-                        local hum = Util.getHumanoid()
-                        if hum then hum:EquipTool(best) end
-                    end
-                end
-            end)
-            Util.wait(5, 10)
-        end
-    end)
-end
-
--- SPEED HACK
-function F.speed(on, val)
-    S.speed = on
-    S.speedVal = val or S.speedVal or 32
-
-    if not on then
-        pcall(function() Util.getHumanoid().WalkSpeed = 16 end)
-        AC.realSpeed = 16
-        Util.notify("Speed", "OFF", 2)
-        return
-    end
-
-    local safe = math.clamp(S.speedVal, 16, 50)
-    AC.realSpeed = safe
-    Util.notify("Speed", tostring(safe), 2)
-
-    task.spawn(function()
-        while S.speed do
-            pcall(function()
-                local h = Util.getHumanoid()
-                if h then h.WalkSpeed = AC.realSpeed end
-            end)
-            task.wait(0.1)
-        end
-    end)
-end
-
--- FLY
-local flyBV, flyBG = nil, nil
-
-function F.fly(on)
-    S.fly = on
-    if not on then
-        pcall(function() if flyBV then flyBV:Destroy(); flyBV = nil end end)
-        pcall(function() if flyBG then flyBG:Destroy(); flyBG = nil end end)
-        remC("fly")
-        Util.notify("Fly", "OFF", 2)
-        return
-    end
-
-    Util.notify("Fly", "ON (E↑ Q↓)", 3)
-    task.spawn(function()
-        local hrp = Util.getHRP()
-        if not hrp then return end
-
-        pcall(function() if flyBV then flyBV:Destroy() end end)
-        pcall(function() if flyBG then flyBG:Destroy() end end)
-
-        flyBV = Instance.new("BodyVelocity")
-        flyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        flyBV.Velocity = Vector3.new(0, 0, 0)
-        flyBV.Parent = hrp
-
-        flyBG = Instance.new("BodyGyro")
-        flyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        flyBG.P = 9e4
-        flyBG.Parent = hrp
-
-        local spd = S.speedVal or 50
-        local cam = WS.CurrentCamera
-
-        local conn = RunService.RenderStepped:Connect(function()
-            if not S.fly then return end
-            pcall(function()
-                if not flyBV or not flyBG or not hrp or not hrp.Parent then return end
-                flyBG.CFrame = cam.CFrame
-
-                local v = Vector3.new(0, 0, 0)
-                if UIS:IsKeyDown(Enum.KeyCode.W) then v = v + cam.CFrame.LookVector * spd end
-                if UIS:IsKeyDown(Enum.KeyCode.S) then v = v - cam.CFrame.LookVector * spd end
-                if UIS:IsKeyDown(Enum.KeyCode.A) then v = v - cam.CFrame.RightVector * spd end
-                if UIS:IsKeyDown(Enum.KeyCode.D) then v = v + cam.CFrame.RightVector * spd end
-                if UIS:IsKeyDown(Enum.KeyCode.E) then v = v + Vector3.new(0, spd, 0) end
-                if UIS:IsKeyDown(Enum.KeyCode.Q) then v = v - Vector3.new(0, spd, 0) end
-
-                flyBV.Velocity = v
-            end)
-        end)
-        addC("fly", conn)
-    end)
-end
-
--- NOCLIP
-function F.noclip(on)
-    S.noclip = on
-    if not on then
-        remC("noclip")
-        Util.notify("Noclip", "OFF", 2)
-        return
-    end
-    Util.notify("Noclip", "ON", 2)
-
-    local conn = RunService.Stepped:Connect(function()
-        if not S.noclip then return end
-        pcall(function()
-            local c = Util.getChar()
-            if c then
-                for _, p in ipairs(c:GetDescendants()) do
-                    if p:IsA("BasePart") then p.CanCollide = false end
+            -- Cari remote untuk casting rod
+            local castRemote = Utility:FindRemote("Cast")
+            if castRemote then
+                -- Fire remote dengan argumen yang plausible
+                castRemote:FireServer()
+                randomDelay(0.1, 0.5)
+            else
+                -- Jika tidak ada remote, coba gunakan tool
+                local rod = Utility:GetCurrentRod()
+                if rod then
+                    rod:Activate()
                 end
             end
+            -- Tunggu beberapa detik sebelum casting lagi
+            wait(math.random(3,8))
         end)
-    end)
-    addC("noclip", conn)
-end
-
--- INF JUMP
-function F.infJump(on)
-    S.infJump = on
-    if not on then remC("infjump"); Util.notify("Inf Jump", "OFF", 2); return end
-    Util.notify("Inf Jump", "ON", 2)
-
-    local conn = UIS.JumpRequest:Connect(function()
-        if not S.infJump then return end
-        pcall(function()
-            local h = Util.getHumanoid()
-            if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
-        end)
-    end)
-    addC("infjump", conn)
-end
-
--- TELEPORT
-local TPLocs = {}
-
-local function updateTP()
-    TPLocs = {}
-    for i, sp in ipairs(GD.spots) do
-        pcall(function()
-            local cf
-            if sp:IsA("Model") then cf = sp:GetBoundingBox()
-            elseif sp:IsA("BasePart") then cf = sp.CFrame end
-            if cf then TPLocs["Spot " .. i] = cf + Vector3.new(0, 3, 0) end
-        end)
-    end
-    local function addLoc(name, obj)
-        if not obj then return end
-        pcall(function()
-            local cf
-            if obj:IsA("Model") then cf = obj:GetBoundingBox()
-            elseif obj:IsA("BasePart") then cf = obj.CFrame end
-            if cf then TPLocs[name] = cf + Vector3.new(0, 3, 0) end
-        end)
-    end
-    addLoc("Shop", GD.shop)
-    addLoc("Sell/Jual", GD.sell)
-    addLoc("Event", GD.event)
-    addLoc("Spawn", GD.spawn)
-    for i, sp in ipairs(GD.secrets) do addLoc("Secret " .. i, sp) end
-end
-
-function F.tp(name)
-    updateTP()
-    if TPLocs[name] then
-        Util.teleportTo(TPLocs[name])
-        Util.notify("TP", "→ " .. name, 2)
-    else
-        Util.notify("TP", "Not found: " .. name, 2)
+        wait(0.1)
     end
 end
 
--- AUTO FARM ROUTE
-function F.autoRoute(on)
-    S.autoRoute = on
-    if not on then Util.notify("Farm Route", "OFF", 2); return end
-    Util.notify("Farm Route", "ON", 2)
-
-    task.spawn(function()
-        updateTP()
-        local route = {}
-        for n, cf in pairs(TPLocs) do
-            if string.find(n, "Spot") or string.find(n, "Secret") then
-                table.insert(route, {name = n, cf = cf})
+-- 2. Auto Perfect Catch
+-- Hook remote yang menangani catch timing
+local originalCatch = nil
+if hookfunction then
+    local catchRemote = Utility:FindRemote("Catch")
+    if catchRemote then
+        originalCatch = catchRemote.FireServer
+        catchRemote.FireServer = function(self, ...)
+            if Features.AutoPerfectCatch then
+                -- Kirim argumen yang membuat perfect catch
+                -- Misal: perfect time = 0.0
+                local args = {...}
+                if #args > 0 and type(args[1]) == "number" then
+                    args[1] = 0.0 -- perfect timing
+                end
+                return originalCatch(self, unpack(args))
+            else
+                return originalCatch(self, ...)
             end
         end
-
-        if #route == 0 then
-            Util.notify("Farm", "No spots!", 3)
-            S.autoRoute = false
-            return
-        end
-
-        local idx = 1
-        while S.autoRoute do
-            pcall(function()
-                local sp = route[idx]
-                if sp then
-                    Util.notify("Farm", "→ " .. sp.name, 2)
-                    Util.teleportTo(sp.cf)
-                    Util.wait(1, 2)
-
-                    local dur = math.random(30, 60)
-                    local st = tick()
-                    while S.autoRoute and (tick() - st) < dur do
-                        if GD.remotes.cast then
-                            Util.fireRemote(GD.remotes.cast)
-                            Util.wait(1, 3)
-                            local cr = GD.remotes.catch or GD.remotes.reel
-                            if cr then Util.fireRemote(cr, "Perfect", 1, true) end
-                        end
-                        Util.wait(1, 3)
-                    end
-                end
-
-                idx = idx + 1
-                if idx > #route then
-                    idx = 1
-                    if GD.remotes.sell then Util.fireRemote(GD.remotes.sell, "All") end
-                end
-            end)
-        end
-    end)
+    end
 end
 
--- PLAYER ESP
-function F.playerESP(on)
-    S.playerESP = on
-    if not on then clearESP("player"); Util.notify("Player ESP", "OFF", 2); return end
-    Util.notify("Player ESP", "ON", 2)
-
-    task.spawn(function()
-        while S.playerESP do
-            clearESP("player")
-            pcall(function()
-                local myH = Util.getHRP()
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= LP and p.Character then
-                        local dist = 0
-                        pcall(function()
-                            local th = p.Character:FindFirstChild("HumanoidRootPart")
-                            if myH and th then dist = math.floor((myH.Position - th.Position).Magnitude) end
-                        end)
-                        makeESP(p.Character, Color3.fromRGB(255, 0, 0),
-                            p.Name .. " [" .. dist .. "m]", "player")
-                    end
-                end
-            end)
-            task.wait(2)
-        end
-        clearESP("player")
-    end)
-end
-
--- ITEM ESP
-function F.itemESP(on)
-    S.itemESP = on
-    if not on then clearESP("item"); Util.notify("Item ESP", "OFF", 2); return end
-    Util.notify("Item ESP", "ON", 2)
-
-    task.spawn(function()
-        while S.itemESP do
-            clearESP("item")
-            pcall(function()
-                for _, fn in ipairs({"Items", "Drops", "Collectibles", "Loot", "Barang"}) do
-                    local f = WS:FindFirstChild(fn)
-                    if f then
-                        for _, i in ipairs(f:GetChildren()) do
-                            makeESP(i, Color3.fromRGB(0, 255, 255), i.Name, "item")
-                        end
-                    end
-                end
-            end)
-            task.wait(3)
-        end
-        clearESP("item")
-    end)
-end
-
--- NPC ESP
-function F.npcESP(on)
-    S.npcESP = on
-    if not on then clearESP("npc"); Util.notify("NPC ESP", "OFF", 2); return end
-    Util.notify("NPC ESP", "ON", 2)
-
-    task.spawn(function()
-        while S.npcESP do
-            clearESP("npc")
-            pcall(function()
-                for _, npc in ipairs(GD.npcs) do
-                    if npc and npc.Parent then
-                        makeESP(npc, Color3.fromRGB(255, 165, 0), npc.Name .. " [NPC]", "npc")
-                    end
-                end
-            end)
-            task.wait(5)
-        end
-        clearESP("npc")
-    end)
-end
-
--- CHEST ESP
-function F.chestESP(on)
-    S.chestESP = on
-    if not on then clearESP("chest"); Util.notify("Chest ESP", "OFF", 2); return end
-    Util.notify("Chest ESP", "ON", 2)
-
-    task.spawn(function()
-        while S.chestESP do
-            clearESP("chest")
-            pcall(function()
-                for _, t in ipairs(GD.chests) do
-                    if t and t.Parent then
-                        makeESP(t, Color3.fromRGB(255, 215, 0), t.Name, "chest")
-                    end
-                end
-            end)
-            task.wait(3)
-        end
-        clearESP("chest")
-    end)
-end
-
--- FULLBRIGHT
-function F.fullbright(on)
-    S.fullbright = on
-    Util.notify("Fullbright", on and "ON" or "OFF", 2)
-    pcall(function()
-        if on then
-            Lighting.Brightness = 2
-            Lighting.ClockTime = 14
-            Lighting.FogEnd = 100000
-            Lighting.GlobalShadows = false
-            Lighting.Ambient = Color3.fromRGB(178, 178, 178)
-            Lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
-            for _, e in ipairs(Lighting:GetChildren()) do
-                pcall(function()
-                    if e:IsA("Atmosphere") or e:IsA("BloomEffect") or
-                       e:IsA("BlurEffect") or e:IsA("ColorCorrectionEffect") or
-                       e:IsA("DepthOfFieldEffect") then
-                        e.Enabled = false
-                    end
-                end)
+-- 3. Auto Reel
+-- Mirip dengan perfect catch, tapi untuk reel timing
+local reelRemote = Utility:FindRemote("Reel")
+if reelRemote then
+    local originalReel = reelRemote.FireServer
+    reelRemote.FireServer = function(self, ...)
+        if Features.AutoReel then
+            -- Kirim argumen yang tepat untuk reel sukses
+            local args = {...}
+            if #args > 0 then
+                args[1] = 1 -- misal 1 = success
             end
+            return originalReel(self, unpack(args))
         else
-            Lighting.Brightness = 1; Lighting.GlobalShadows = true
-            Lighting.Ambient = Color3.fromRGB(0,0,0)
+            return originalReel(self, ...)
         end
-    end)
+    end
 end
 
--- NO FOG
-function F.noFog(on)
-    S.noFog = on
-    Util.notify("No Fog", on and "ON" or "OFF", 2)
-    pcall(function()
-        Lighting.FogEnd = on and 9e9 or 1000
-        for _, e in ipairs(Lighting:GetChildren()) do
-            if e:IsA("Atmosphere") then e.Density = on and 0 or 0.3 end
+-- 4. Instant Fish
+-- Mencoba memanggil remote catch langsung tanpa delay
+local function instantFish()
+    if Features.InstantFish then
+        local catchRemote = Utility:FindRemote("Catch")
+        if catchRemote then
+            catchRemote:FireServer() -- mungkin perlu argumen
         end
-    end)
+    end
 end
 
--- NO WATER
-function F.noWater(on)
-    S.noWater = on
-    Util.notify("No Water", on and "ON" or "OFF", 2)
-    pcall(function()
-        local t = WS.Terrain
-        if on then
-            t.WaterTransparency = 1; t.WaterReflectance = 0
-            t.WaterWaveSize = 0; t.WaterWaveSpeed = 0
-        else
-            t.WaterTransparency = 0.3; t.WaterReflectance = 1
-        end
-    end)
-end
-
--- FOV
-function F.setFOV(v)
-    S.fov = v
-    pcall(function() WS.CurrentCamera.FieldOfView = v end)
-end
-
--- ANTI AFK
-function F.antiAFK(on)
-    S.antiAFK = on
-    Util.notify("Anti-AFK", on and "ON" or "OFF", 2)
-    if not on then remC("antiafk"); return end
-
-    if VirtualUser then
-        local conn = LP.Idled:Connect(function()
-            if S.antiAFK and VirtualUser then
-                pcall(function()
-                    VirtualUser:Button2Down(Vector2.new(0,0), WS.CurrentCamera.CFrame)
-                    task.wait(0.1)
-                    VirtualUser:Button2Up(Vector2.new(0,0), WS.CurrentCamera.CFrame)
-                end)
+-- 5. Auto Sell
+local function autoSellLoop()
+    while Features.AutoSell do
+        pcall(function()
+            -- Cari remote sell
+            local sellRemote = Utility:FindRemote("Sell")
+            if sellRemote then
+                sellRemote:FireServer()
+            else
+                -- Coba interaksi dengan NPC sell
+                local sellNPC = workspace:FindFirstChild("SellNPC")
+                if sellNPC then
+                    -- Teleport ke NPC dan klik
+                    Utility:TeleportTo(sellNPC.Position + Vector3.new(0,3,0))
+                    wait(0.5)
+                    -- Fire remote interact
+                    local interactRemote = Utility:FindRemote("Interact")
+                    if interactRemote then
+                        interactRemote:FireServer(sellNPC)
+                    end
+                end
             end
+            randomDelay(1,3)
         end)
-        addC("antiafk", conn)
+        wait(1)
+    end
+end
+
+-- 6. Fish ESP
+local espConnections = {}
+local function setupFishESP()
+    if Features.FishESP then
+        -- Cari semua ikan di workspace
+        for _, fish in pairs(workspace:GetDescendants()) do
+            if fish:IsA("Model") and fish.Name:lower():find("fish") then
+                -- Buat bounding box atau highlight
+                if not fish:FindFirstChild("ESPBox") then
+                    local box = Instance.new("BoxHandleAdornment")
+                    box.Name = "ESPBox"
+                    box.Size = fish:GetExtentsSize()
+                    box.Adornee = fish
+                    box.Color3 = Color3.fromRGB(255,0,0)
+                    box.Transparency = 0.5
+                    box.ZIndex = 10
+                    box.Parent = fish
+                    -- Tambahkan label nama
+                    local label = Instance.new("BillboardGui")
+                    label.Name = "ESPLabel"
+                    label.Adornee = fish
+                    label.Size = UDim2.new(0,100,0,20)
+                    label.StudsOffset = Vector3.new(0,2,0)
+                    local text = Instance.new("TextLabel")
+                    text.Text = fish.Name
+                    text.Size = UDim2.new(1,0,1,0)
+                    text.BackgroundTransparency = 1
+                    text.TextColor3 = Color3.fromRGB(255,255,255)
+                    text.Parent = label
+                    label.Parent = fish
+                    -- Simpan untuk cleanup nanti
+                    table.insert(espConnections, {box, label})
+                end
+            end
+        end
     else
+        -- Hapus semua ESP
+        for _, objs in pairs(espConnections) do
+            for _, obj in pairs(objs) do
+                obj:Destroy()
+            end
+        end
+        espConnections = {}
+    end
+end
+
+-- 7. Rare Fish Notification
+local function checkRareFish()
+    if Features.RareFishNotify then
+        -- Monitoring munculnya ikan langka (bisa dari event atau ESP scanning)
+        -- Misal setiap detik cek apakah ada ikan dengan rarity tinggi
         task.spawn(function()
-            while S.antiAFK do
-                pcall(function()
-                    local h = Util.getHumanoid()
-                    if h then h:Move(Vector3.new(0,0,0)) end
-                end)
-                task.wait(60)
+            while Features.RareFishNotify do
+                for _, fish in pairs(workspace:GetDescendants()) do
+                    if fish:IsA("Model") and fish.Name:lower():find("rare") then
+                        Utility:Notify("Rare Fish Spotted", fish.Name, 5)
+                        break
+                    end
+                end
+                wait(2)
             end
         end)
     end
 end
 
--- GOD MODE
-function F.godMode(on)
-    S.godMode = on
-    Util.notify("God Mode", on and "ON" or "OFF", 2)
-    if not on then
-        pcall(function() local h = Util.getHumanoid(); h.MaxHealth = 100; h.Health = 100 end)
-        return
+-- 8. Auto Equip Best Rod
+local function autoEquipBestRod()
+    if Features.AutoEquipBestRod then
+        -- Cari rod terbaik di inventory berdasarkan harga atau level
+        local bestRod = nil
+        local bestValue = 0
+        local backpack = game.Players.LocalPlayer.Backpack
+        for _, item in pairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and item.Name:lower():find("rod") then
+                -- Ambil nilai stat dari tool (misal ada attribute "Level" atau "Price")
+                local value = item:GetAttribute("Level") or 0
+                if value > bestValue then
+                    bestValue = value
+                    bestRod = item
+                end
+            end
+        end
+        if bestRod then
+            bestRod.Parent = game.Players.LocalPlayer.Character
+        end
     end
-    task.spawn(function()
-        while S.godMode do
-            pcall(function()
-                local h = Util.getHumanoid()
-                if h then h.MaxHealth = 9e9; h.Health = 9e9 end
-            end)
-            task.wait(0.5)
-        end
-    end)
 end
 
--- NO COOLDOWN
-function F.noCD(on)
-    S.noCD = on
-    Util.notify("No Cooldown", on and "ON" or "OFF", 2)
-    if not on then return end
-    task.spawn(function()
-        while S.noCD do
-            pcall(function()
-                local c = Util.getChar()
-                if c then
-                    for _, v in ipairs(c:GetDescendants()) do
-                        local n = v.Name:lower()
-                        if string.find(n, "cooldown") or string.find(n, "cd") or string.find(n, "debounce") then
-                            if v:IsA("NumberValue") or v:IsA("IntValue") then v.Value = 0
-                            elseif v:IsA("BoolValue") then v.Value = false end
-                        end
-                    end
-                end
-            end)
-            task.wait(0.1)
+-- 9. Custom Fish Target
+-- Tidak diimplementasikan detail, bisa filter fishing spot
+
+-- 10. Speed Hack dengan spoofing
+local function applySpeed()
+    if Features.SpeedHack then
+        local hum = Utility:GetHumanoid()
+        if hum then
+            hum.WalkSpeed = Features.SpeedValue
+            -- Spoof nilai ke server? Bisa dengan hook remote movement validation
         end
-    end)
+    else
+        local hum = Utility:GetHumanoid()
+        if hum and hum.WalkSpeed ~= 16 then
+            hum.WalkSpeed = 16
+        end
+    end
 end
 
--- INF STAMINA
-function F.infStamina(on)
-    S.infStamina = on
-    Util.notify("Inf Stamina", on and "ON" or "OFF", 2)
-    if not on then return end
-    task.spawn(function()
-        while S.infStamina do
-            pcall(function()
-                for _, place in ipairs({LP:FindFirstChild("PlayerGui"), LP:FindFirstChild("leaderstats"),
-                    LP:FindFirstChild("Stats"), LP:FindFirstChild("Data")}) do
-                    if place then
-                        for _, v in ipairs(place:GetDescendants()) do
-                            if (string.find(v.Name:lower(), "stamina") or string.find(v.Name:lower(), "energy")) then
-                                if v:IsA("NumberValue") or v:IsA("IntValue") then
-                                    v.Value = math.max(v.Value, 100)
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-            task.wait(0.5)
-        end
-    end)
-end
-
--- INF BAIT
-function F.infBait(on)
-    S.infBait = on
-    Util.notify("Inf Bait", on and "ON" or "OFF", 2)
-    if not on then return end
-    task.spawn(function()
-        while S.infBait do
-            pcall(function()
-                for _, place in ipairs({LP:FindFirstChild("Data"), LP:FindFirstChild("Stats"),
-                    LP:FindFirstChild("leaderstats")}) do
-                    if place then
-                        for _, v in ipairs(place:GetDescendants()) do
-                            if string.find(v.Name:lower(), "bait") or string.find(v.Name:lower(), "umpan") then
-                                if v:IsA("NumberValue") or v:IsA("IntValue") then
-                                    v.Value = math.max(v.Value, 999)
-                                end
-                            end
-                        end
-                    end
-                end
-                if GD.remotes.bait then Util.fireRemote(GD.remotes.bait, "Refill") end
-            end)
-            Util.wait(2, 5)
-        end
-    end)
-end
-
--- AUTO COLLECT
-function F.autoCollect(on)
-    S.autoCollect = on
-    Util.notify("Auto Collect", on and "ON" or "OFF", 2)
-    if not on then return end
-    task.spawn(function()
-        while S.autoCollect do
-            pcall(function()
-                if GD.remotes.collect then Util.fireRemote(GD.remotes.collect) end
-                local pg = LP:FindFirstChild("PlayerGui")
-                if pg then
-                    for _, g in ipairs(pg:GetDescendants()) do
-                        if (g:IsA("TextButton") or g:IsA("ImageButton")) and g.Visible then
-                            local n = g.Name:lower()
-                            local t = ""; pcall(function() t = g.Text:lower() end)
-                            if string.find(n, "collect") or string.find(n, "claim") or
-                               string.find(n, "reward") or string.find(n, "ambil") or
-                               string.find(t, "collect") or string.find(t, "claim") or
-                               string.find(t, "ambil") then
-                                pcall(function()
-                                    if Exec.firesignal then Exec.firesignal(g.MouseButton1Click)
-                                    else pcall(function() g.MouseButton1Click:Fire() end) end
-                                end)
-                                Util.wait(0.2, 0.4)
-                            end
-                        end
-                    end
-                end
-            end)
-            Util.wait(15, 30)
-        end
-    end)
-end
-
--- AUTO DAILY
-function F.autoDaily()
-    Util.notify("Daily", "Claiming...", 2)
-    pcall(function()
-        local pg = LP:FindFirstChild("PlayerGui")
-        if pg then
-            for _, g in ipairs(pg:GetDescendants()) do
-                if g:IsA("TextButton") or g:IsA("ImageButton") then
-                    local n = g.Name:lower()
-                    local t = ""; pcall(function() t = g.Text:lower() end)
-                    if string.find(n, "daily") or string.find(t, "daily") or
-                       string.find(n, "login") or string.find(n, "harian") then
-                        pcall(function()
-                            if Exec.firesignal then Exec.firesignal(g.MouseButton1Click)
-                            else pcall(function() g.MouseButton1Click:Fire() end) end
-                        end)
-                    end
-                end
-            end
-        end
-        local dr = Util.findRemote("daily") or Util.findRemote("login") or Util.findRemote("harian")
-        if dr then Util.fireRemote(dr) end
-    end)
-    Util.notify("Daily", "Done!", 2)
-end
-
--- AUTO QUEST
-function F.autoQuest(on)
-    S.autoQuest = on
-    Util.notify("Auto Quest", on and "ON" or "OFF", 2)
-    if not on then return end
-    task.spawn(function()
-        while S.autoQuest do
-            pcall(function()
-                if GD.remotes.quest then
-                    Util.fireRemote(GD.remotes.quest, "Accept")
-                    Util.wait(0.5, 1)
-                    Util.fireRemote(GD.remotes.quest, "Complete")
-                    Util.wait(0.5, 1)
-                    Util.fireRemote(GD.remotes.quest, "Claim")
-                end
-            end)
-            Util.wait(15, 30)
-        end
-    end)
-end
-
--- AUTO BUY ROD
-function F.buyRod()
-    Util.notify("Buy Rod", "Trying...", 2)
-    pcall(function()
-        if GD.remotes.buy then
-            for _, rod in ipairs({"Legendary Rod","Diamond Rod","Gold Rod","Platinum Rod",
-                                   "Titanium Rod","Steel Rod","Iron Rod"}) do
-                Util.fireRemote(GD.remotes.buy, rod)
-                Util.wait(0.2, 0.4)
-            end
-        end
-    end)
-    Util.notify("Buy Rod", "Done!", 2)
-end
-
--- AUTO UPGRADE
-function F.autoUpgrade(on)
-    S.autoUpgrade = on
-    Util.notify("Auto Upgrade", on and "ON" or "OFF", 2)
-    if not on then return end
-    task.spawn(function()
-        while S.autoUpgrade do
-            pcall(function()
-                if GD.remotes.upgrade then
-                    Util.fireRemote(GD.remotes.upgrade, "Rod")
-                    Util.wait(0.5, 1)
-                    Util.fireRemote(GD.remotes.upgrade, "Bait")
-                end
-            end)
-            Util.wait(30, 60)
-        end
-    end)
-end
-
--- SERVER HOP
-function F.serverHop()
-    Util.notify("Hop", "Finding server...", 3)
-    pcall(function()
-        local pid = game.PlaceId
-        if Exec.request then
-            local s2, resp = pcall(function()
-                return Exec.request({
-                    Url = "https://games.roblox.com/v1/games/"..pid.."/servers/Public?sortOrder=Asc&limit=100",
-                    Method = "GET"
-                })
-            end)
-            if s2 and resp and resp.Body then
-                local data = HttpService:JSONDecode(resp.Body)
-                if data and data.data then
-                    local svrs = {}
-                    for _, sv in ipairs(data.data) do
-                        if sv.playing and sv.maxPlayers and sv.id and
-                           sv.playing < sv.maxPlayers and sv.id ~= game.JobId then
-                            table.insert(svrs, sv.id)
-                        end
-                    end
-                    if #svrs > 0 then
-                        TeleportService:TeleportToPlaceInstance(pid, svrs[math.random(#svrs)], LP)
+-- 11. Fly Hack
+local flyEnabled = false
+local function fly()
+    if Features.FlyHack then
+        if not flyEnabled then
+            flyEnabled = true
+            local char = Utility:GetCharacter()
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChild("Humanoid")
+            if hrp and hum then
+                local bodyVelocity = Instance.new("BodyVelocity")
+                bodyVelocity.MaxForce = Vector3.new(10000,10000,10000)
+                bodyVelocity.Velocity = Vector3.new(0,0,0)
+                bodyVelocity.Parent = hrp
+                local bodyGyro = Instance.new("BodyGyro")
+                bodyGyro.MaxTorque = Vector3.new(10000,10000,10000)
+                bodyGyro.CFrame = hrp.CFrame
+                bodyGyro.Parent = hrp
+                local flyLoop
+                flyLoop = game:GetService("RunService").RenderStepped:Connect(function()
+                    if not Features.FlyHack then
+                        bodyVelocity:Destroy()
+                        bodyGyro:Destroy()
+                        flyLoop:Disconnect()
+                        flyEnabled = false
                         return
                     end
-                end
+                    local moveDirection = Vector3.new(0,0,0)
+                    local userInput = game:GetService("UserInputService")
+                    if userInput:IsKeyDown(Enum.KeyCode.W) then
+                        moveDirection = moveDirection + hrp.CFrame.LookVector
+                    end
+                    if userInput:IsKeyDown(Enum.KeyCode.S) then
+                        moveDirection = moveDirection - hrp.CFrame.LookVector
+                    end
+                    if userInput:IsKeyDown(Enum.KeyCode.A) then
+                        moveDirection = moveDirection - hrp.CFrame.RightVector
+                    end
+                    if userInput:IsKeyDown(Enum.KeyCode.D) then
+                        moveDirection = moveDirection + hrp.CFrame.RightVector
+                    end
+                    if userInput:IsKeyDown(Enum.KeyCode.Space) then
+                        moveDirection = moveDirection + Vector3.new(0,1,0)
+                    end
+                    if userInput:IsKeyDown(Enum.KeyCode.LeftControl) then
+                        moveDirection = moveDirection - Vector3.new(0,1,0)
+                    end
+                    bodyVelocity.Velocity = moveDirection * 50
+                    bodyGyro.CFrame = hrp.CFrame
+                end)
             end
         end
-        TeleportService:Teleport(pid, LP)
-    end)
-end
-
--- REJOIN
-function F.rejoin()
-    Util.notify("Rejoin", "...", 2)
-    pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
-end
-
--- FPS BOOST
-function F.fpsBoost(on)
-    S.fpsBoost = on
-    Util.notify("FPS Boost", on and "ON" or "OFF", 2)
-    if not on then return end
-    pcall(function()
-        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-        for _, obj in ipairs(WS:GetDescendants()) do
-            pcall(function()
-                if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or
-                   obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-                    obj.Enabled = false
-                end
-                if obj:IsA("Decal") or obj:IsA("Texture") then obj.Transparency = 1 end
-                if obj:IsA("BasePart") then
-                    obj.Material = Enum.Material.SmoothPlastic
-                    obj.Reflectance = 0
-                end
-            end)
-        end
-        for _, e in ipairs(Lighting:GetChildren()) do
-            pcall(function()
-                if e:IsA("BloomEffect") or e:IsA("BlurEffect") or e:IsA("DepthOfFieldEffect") or
-                   e:IsA("SunRaysEffect") or e:IsA("ColorCorrectionEffect") then e.Enabled = false end
-                if e:IsA("Atmosphere") then e.Density = 0 end
-            end)
-        end
-        pcall(function() WS.Terrain.Decoration = false; WS.Terrain.WaterWaveSize = 0 end)
-    end)
-end
-
--- CHAT SPAM
-function F.chatSpam(on, msg)
-    S.chatSpam = on
-    S.chatMsg = msg or S.chatMsg or "KimJong v2.2"
-    Util.notify("Chat Spam", on and "ON" or "OFF", 2)
-    if not on then return end
-    task.spawn(function()
-        while S.chatSpam do
-            pcall(function()
-                local ce = RS:FindFirstChild("DefaultChatSystemChatEvents")
-                if ce then
-                    local say = ce:FindFirstChild("SayMessageRequest")
-                    if say then say:FireServer(S.chatMsg, "All") end
-                end
-            end)
-            Util.wait(3, 6)
-        end
-    end)
-end
-
--- CLEANUP
-local function cleanup()
-    Util.notify("KimJong", "Unloading...", 3)
-    for k, v in pairs(S) do if type(v) == "boolean" then S[k] = false end end
-    task.wait(0.5)
-    for _, conn in pairs(C) do pcall(function() conn:Disconnect() end) end
-    C = {}
-    for cat in pairs(ESP) do clearESP(cat) end
-    pcall(function() if flyBV then flyBV:Destroy() end end)
-    pcall(function() if flyBG then flyBG:Destroy() end end)
-    pcall(function() Util.getHumanoid().WalkSpeed = 16 end)
-    pcall(function() WS.CurrentCamera.FieldOfView = 70 end)
-    AC.enabled = false
-
-    -- Destroy GUI
-    pcall(function()
-        local cg = game:GetService("CoreGui")
-        for _, g in ipairs(cg:GetChildren()) do
-            if g:IsA("ScreenGui") and string.find(g.Name, "_kj") then g:Destroy() end
-        end
-    end)
-    pcall(function()
-        local pg = LP:FindFirstChild("PlayerGui")
-        if pg then
-            for _, g in ipairs(pg:GetChildren()) do
-                if g:IsA("ScreenGui") and string.find(g.Name, "_kj") then g:Destroy() end
-            end
-        end
-    end)
-end
-
--- ======================================
--- BUILD GUI (Custom - no external lib)
--- Works on ALL executors including Delta
--- ======================================
-
--- Remove old GUI if exists
-pcall(function()
-    for _, g in ipairs(game:GetService("CoreGui"):GetChildren()) do
-        if string.find(g.Name, "_kj") then g:Destroy() end
-    end
-end)
-pcall(function()
-    for _, g in ipairs(LP.PlayerGui:GetChildren()) do
-        if string.find(g.Name, "_kj") then g:Destroy() end
-    end
-end)
-
-local sg = Instance.new("ScreenGui")
-sg.Name = "_kj" .. math.random(1000, 9999)
-sg.ResetOnSpawn = false
-sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
--- Parent GUI (try CoreGui, fallback PlayerGui)
-local guiOk = pcall(function()
-    if Exec.gethui then
-        sg.Parent = Exec.gethui()
-    elseif syn and syn.protect_gui then
-        syn.protect_gui(sg)
-        sg.Parent = game:GetService("CoreGui")
     else
-        sg.Parent = game:GetService("CoreGui")
-    end
-end)
-if not guiOk then
-    sg.Parent = LP:FindFirstChild("PlayerGui")
-end
-
--- Main Frame
-local main = Instance.new("Frame")
-main.Name = "M"
-main.Size = UDim2.new(0, 380, 0, 420)
-main.Position = UDim2.new(0.5, -190, 0.5, -210)
-main.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
-main.BorderSizePixel = 0
-main.Active = true
-main.Draggable = true
-main.Parent = sg
-
-pcall(function() Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10) end)
-
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(0, 140, 255)
-stroke.Thickness = 2
-stroke.Transparency = 0.3
-stroke.Parent = main
-
--- Title Bar
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 34)
-titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = main
-pcall(function() Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10) end)
-
-local titleText = Instance.new("TextLabel")
-titleText.Size = UDim2.new(1, -80, 1, 0)
-titleText.Position = UDim2.new(0, 8, 0, 0)
-titleText.BackgroundTransparency = 1
-titleText.Text = "🐟 KimJong v2.2"
-titleText.TextColor3 = Color3.fromRGB(0, 200, 255)
-titleText.TextXAlignment = Enum.TextXAlignment.Left
-titleText.Font = Enum.Font.GothamBold
-titleText.TextSize = 14
-titleText.Parent = titleBar
-
--- Close Button
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 26, 0, 26)
-closeBtn.Position = UDim2.new(1, -30, 0, 4)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.new(1,1,1)
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 12
-closeBtn.Parent = titleBar
-pcall(function() Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5) end)
-
--- Minimize Button
-local minBtn = Instance.new("TextButton")
-minBtn.Size = UDim2.new(0, 26, 0, 26)
-minBtn.Position = UDim2.new(1, -60, 0, 4)
-minBtn.BackgroundColor3 = Color3.fromRGB(200, 170, 0)
-minBtn.Text = "−"
-minBtn.TextColor3 = Color3.new(0,0,0)
-minBtn.Font = Enum.Font.GothamBold
-minBtn.TextSize = 16
-minBtn.Parent = titleBar
-pcall(function() Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 5) end)
-
--- TAB BAR
-local tabBar = Instance.new("Frame")
-tabBar.Size = UDim2.new(1, -8, 0, 28)
-tabBar.Position = UDim2.new(0, 4, 0, 36)
-tabBar.BackgroundTransparency = 1
-tabBar.Parent = main
-
-local tabLayout = Instance.new("UIListLayout")
-tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding = UDim.new(0, 3)
-tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-tabLayout.Parent = tabBar
-
--- Content pages (one per tab)
-local pages = {}
-local tabButtons = {}
-
-local tabNames = {"🎣Fish", "📍TP", "👁️ESP", "🧑Plr", "💰Farm", "🔧Misc"}
-local currentTab = nil
-
-for i, tn in ipairs(tabNames) do
-    -- Tab button
-    local tb = Instance.new("TextButton")
-    tb.Size = UDim2.new(0, 58, 0, 24)
-    tb.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
-    tb.Text = tn
-    tb.TextColor3 = Color3.fromRGB(160, 160, 160)
-    tb.Font = Enum.Font.GothamBold
-    tb.TextSize = 10
-    tb.LayoutOrder = i
-    tb.Parent = tabBar
-    pcall(function() Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 5) end)
-    tabButtons[i] = tb
-
-    -- Page (scroll frame)
-    local page = Instance.new("ScrollingFrame")
-    page.Name = "P" .. i
-    page.Size = UDim2.new(1, -8, 1, -70)
-    page.Position = UDim2.new(0, 4, 0, 66)
-    page.BackgroundTransparency = 1
-    page.ScrollBarThickness = 3
-    page.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-    page.CanvasSize = UDim2.new(0, 0, 0, 0)
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    page.Visible = false
-    page.Parent = main
-
-    local pl = Instance.new("UIListLayout")
-    pl.Padding = UDim.new(0, 3)
-    pl.SortOrder = Enum.SortOrder.LayoutOrder
-    pl.Parent = page
-
-    pages[i] = page
-
-    tb.MouseButton1Click:Connect(function()
-        for j, p in pairs(pages) do
-            p.Visible = (j == i)
-            tabButtons[j].BackgroundColor3 = (j == i)
-                and Color3.fromRGB(0, 100, 200)
-                or Color3.fromRGB(35, 35, 55)
-            tabButtons[j].TextColor3 = (j == i)
-                and Color3.new(1,1,1)
-                or Color3.fromRGB(160, 160, 160)
+        if flyEnabled then
+            flyEnabled = false
         end
-        currentTab = i
-    end)
+    end
 end
 
--- Select first tab
-pages[1].Visible = true
-tabButtons[1].BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-tabButtons[1].TextColor3 = Color3.new(1,1,1)
-
--- UI Builder helpers
-local ordIdx = {}
-for i = 1, #tabNames do ordIdx[i] = 0 end
-
-local function addSection(pageIdx, text)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -6, 0, 18)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = "── " .. text .. " ──"
-    lbl.TextColor3 = Color3.fromRGB(0, 180, 255)
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 11
-    lbl.LayoutOrder = ordIdx[pageIdx]
-    lbl.Parent = pages[pageIdx]
-    ordIdx[pageIdx] = ordIdx[pageIdx] + 1
-end
-
-local function addToggle(pageIdx, text, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -6, 0, 28)
-    btn.BackgroundColor3 = Color3.fromRGB(32, 32, 48)
-    btn.Text = " ❌ " .. text
-    btn.TextColor3 = Color3.fromRGB(185, 185, 185)
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 12
-    btn.LayoutOrder = ordIdx[pageIdx]
-    btn.Parent = pages[pageIdx]
-    pcall(function() Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5) end)
-
-    local on = false
-    btn.MouseButton1Click:Connect(function()
-        on = not on
-        btn.Text = on and (" ✅ " .. text) or (" ❌ " .. text)
-        btn.BackgroundColor3 = on and Color3.fromRGB(0, 65, 30) or Color3.fromRGB(32, 32, 48)
-        pcall(callback, on)
-    end)
-    ordIdx[pageIdx] = ordIdx[pageIdx] + 1
-    return btn
-end
-
-local function addButton(pageIdx, text, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -6, 0, 28)
-    btn.BackgroundColor3 = Color3.fromRGB(0, 70, 140)
-    btn.Text = " ▶ " .. text
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 12
-    btn.LayoutOrder = ordIdx[pageIdx]
-    btn.Parent = pages[pageIdx]
-    pcall(function() Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5) end)
-
-    btn.MouseButton1Click:Connect(function() pcall(callback) end)
-    ordIdx[pageIdx] = ordIdx[pageIdx] + 1
-    return btn
-end
-
--- ========== PAGE 1: FISHING ==========
-addSection(1, "Auto Fishing")
-addToggle(1, "Auto Fish", function(v) F.autoFish(v) end)
-addToggle(1, "Auto Perfect Catch", function(v) F.autoPerfect(v) end)
-addToggle(1, "Auto Reel", function(v) F.autoReel(v) end)
-addToggle(1, "Instant Fish ⚠️", function(v) F.instantFish(v) end)
-addToggle(1, "Auto Sell", function(v) F.autoSell(v) end)
-addToggle(1, "Fish ESP", function(v) F.fishESP(v) end)
-addToggle(1, "Rare Fish Alert", function(v) F.rareNotify(v) end)
-addToggle(1, "Auto Equip Rod", function(v) F.autoEquip(v) end)
-
--- ========== PAGE 2: TELEPORT ==========
-addSection(2, "Locations")
-
--- Build TP buttons dynamically
-updateTP()
-local tpCount = 0
-for name, _ in pairs(TPLocs) do
-    addButton(2, "TP: " .. name, function() F.tp(name) end)
-    tpCount = tpCount + 1
-end
-
-if tpCount == 0 then
-    addButton(2, "TP: Spot 1 (scan needed)", function() F.tp("Spot 1") end)
-    addButton(2, "TP: Shop", function() F.tp("Shop") end)
-    addButton(2, "TP: Sell/Jual", function() F.tp("Sell/Jual") end)
-end
-
-addSection(2, "Player TP")
-
--- Player TP buttons
-for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LP then
-        addButton(2, "TP → " .. p.Name, function()
-            pcall(function()
-                local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then Util.teleportTo(hrp.CFrame + Vector3.new(0, 3, 5)) end
+-- 12. Noclip
+local noclipEnabled = false
+local function noclip()
+    if Features.Noclip then
+        if not noclipEnabled then
+            noclipEnabled = true
+            local char = Utility:GetCharacter()
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+            char.ChildAdded:Connect(function(child)
+                if child:IsA("BasePart") and Features.Noclip then
+                    child.CanCollide = false
+                end
             end)
+        end
+    else
+        if noclipEnabled then
+            noclipEnabled = false
+            local char = Utility:GetCharacter()
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+-- 13. Teleport ke lokasi
+local function teleportToLocation(locationName)
+    if locationName == "Shop" then
+        -- Cari shop location
+        local shop = workspace:FindFirstChild("Shop") or workspace:FindFirstChild("Store")
+        if shop then
+            Utility:TeleportTo(shop.Position + Vector3.new(0,3,0))
+        end
+    elseif locationName == "SellArea" then
+        local sellArea = workspace:FindFirstChild("SellArea")
+        if sellArea then
+            Utility:TeleportTo(sellArea.Position + Vector3.new(0,3,0))
+        end
+    elseif locationName == "EventArea" then
+        local eventArea = workspace:FindFirstChild("EventArea")
+        if eventArea then
+            Utility:TeleportTo(eventArea.Position + Vector3.new(0,3,0))
+        end
+    else
+        -- Mungkin fishing spot
+        local spots = Utility:GetFishingSpots()
+        for _, spot in pairs(spots) do
+            if spot.Name:lower():find(locationName:lower()) then
+                Utility:TeleportTo(spot.Position + Vector3.new(0,3,0))
+                break
+            end
+        end
+    end
+end
+
+-- 14. Auto Farm Route
+local routeSpots = {}
+local function autoFarmLoop()
+    while Features.AutoFarmRoute do
+        for _, spotPos in pairs(routeSpots) do
+            if not Features.AutoFarmRoute then break end
+            Utility:TeleportTo(spotPos)
+            wait(math.random(5,10))
+        end
+        wait(1)
+    end
+end
+
+-- 15. Infinite Jump
+local function infiniteJump()
+    if Features.InfiniteJump then
+        local userInput = game:GetService("UserInputService")
+        userInput.JumpRequest:Connect(function()
+            local hum = Utility:GetHumanoid()
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
         end)
     end
 end
 
-addSection(2, "Auto")
-addToggle(2, "Auto Farm Route", function(v) F.autoRoute(v) end)
-
--- ========== PAGE 3: ESP ==========
-addSection(3, "ESP")
-addToggle(3, "Player ESP", function(v) F.playerESP(v) end)
-addToggle(3, "Item ESP", function(v) F.itemESP(v) end)
-addToggle(3, "NPC ESP", function(v) F.npcESP(v) end)
-addToggle(3, "Chest/Treasure ESP", function(v) F.chestESP(v) end)
-
-addSection(3, "Visual")
-addToggle(3, "Fullbright", function(v) F.fullbright(v) end)
-addToggle(3, "No Fog", function(v) F.noFog(v) end)
-addToggle(3, "No Water Effect", function(v) F.noWater(v) end)
-addButton(3, "FOV 90", function() F.setFOV(90) end)
-addButton(3, "FOV 100", function() F.setFOV(100) end)
-addButton(3, "FOV 120", function() F.setFOV(120) end)
-addButton(3, "FOV Reset (70)", function() F.setFOV(70) end)
-
--- ========== PAGE 4: PLAYER ==========
-addSection(4, "Movement")
-addToggle(4, "Speed (32)", function(v) F.speed(v, 32) end)
-addToggle(4, "Speed (48)", function(v) F.speed(v, 48) end)
-addToggle(4, "Fly", function(v) F.fly(v) end)
-addToggle(4, "Noclip", function(v) F.noclip(v) end)
-addToggle(4, "Infinite Jump", function(v) F.infJump(v) end)
-
-addSection(4, "Buffs")
-addToggle(4, "Inf Stamina", function(v) F.infStamina(v) end)
-addToggle(4, "No Cooldown", function(v) F.noCD(v) end)
-addToggle(4, "God Mode", function(v) F.godMode(v) end)
-addToggle(4, "Infinite Bait", function(v) F.infBait(v) end)
-
--- ========== PAGE 5: FARM ==========
-addSection(5, "Auto Farm")
-addToggle(5, "Auto Collect Rewards", function(v) F.autoCollect(v) end)
-addButton(5, "Claim Daily Reward", function() F.autoDaily() end)
-addToggle(5, "Auto Quest", function(v) F.autoQuest(v) end)
-addButton(5, "Buy Best Rod", function() F.buyRod() end)
-addToggle(5, "Auto Upgrade", function(v) F.autoUpgrade(v) end)
-
--- ========== PAGE 6: MISC ==========
-addSection(6, "Utility")
-addToggle(6, "Anti-AFK", function(v) F.antiAFK(v) end)
-addToggle(6, "FPS Booster", function(v) F.fpsBoost(v) end)
-addButton(6, "Server Hop", function() F.serverHop() end)
-addButton(6, "Rejoin", function() F.rejoin() end)
-addToggle(6, "Chat Spam", function(v) F.chatSpam(v) end)
-
-addSection(6, "Settings")
-addToggle(6, "Anti-Cheat Bypass", function(v) AC.enabled = v
-    Util.notify("AC", v and "ON" or "OFF", 2) end)
-addButton(6, "Re-Scan Game", function()
-    GD.scan(); updateTP()
-    Util.notify("Scan", "Done! Spots: " .. #GD.spots, 3)
-end)
-
--- Info label
-local infoLbl = Instance.new("TextLabel")
-infoLbl.Size = UDim2.new(1, -6, 0, 50)
-infoLbl.BackgroundTransparency = 0.5
-infoLbl.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
-infoLbl.TextColor3 = Color3.fromRGB(150, 150, 150)
-infoLbl.Font = Enum.Font.Gotham
-infoLbl.TextSize = 10
-infoLbl.TextWrapped = true
-infoLbl.LayoutOrder = 999
-infoLbl.Parent = pages[6]
-pcall(function() Instance.new("UICorner", infoLbl).CornerRadius = UDim.new(0, 5) end)
-
-local rc = 0; for _ in pairs(GD.remotes) do rc = rc + 1 end
-infoLbl.Text = "Executor: " .. execName .. " | Caps: " .. capCount ..
-    "\nHooks: " .. tostring(AC.hooked) .. " | Remotes: " .. rc ..
-    "\nSpots: " .. #GD.spots .. " | NPCs: " .. #GD.npcs ..
-    "\n⚠️ Educational purpose only"
-
-addButton(6, "🗑️ DESTROY SCRIPT", function() cleanup(); sg:Destroy() end)
-
--- CLOSE & MINIMIZE LOGIC
-closeBtn.MouseButton1Click:Connect(function()
-    cleanup()
-    sg:Destroy()
-end)
-
-local minimized = false
-minBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    for _, p in pairs(pages) do p.Visible = false end
-    tabBar.Visible = not minimized
-
-    if minimized then
-        main.Size = UDim2.new(0, 380, 0, 36)
-        minBtn.Text = "+"
-    else
-        main.Size = UDim2.new(0, 380, 0, 420)
-        minBtn.Text = "−"
-        -- Show current tab
-        if currentTab and pages[currentTab] then
-            pages[currentTab].Visible = true
-        else
-            pages[1].Visible = true
+-- 16. Infinite Stamina
+local function infiniteStamina()
+    if Features.InfiniteStamina then
+        local hum = Utility:GetHumanoid()
+        if hum and hum:FindFirstChild("Stamina") then
+            hum.Stamina.Value = hum.Stamina.MaxValue
         end
     end
-end)
+end
 
--- TOGGLE UI (RightShift)
-UIS.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        sg.Enabled = not sg.Enabled
+-- 17. No Cooldown
+local function noCooldown()
+    if Features.NoCooldown then
+        -- Cari cooldown timer di player
+        local playerGui = game.Players.LocalPlayer.PlayerGui
+        local cooldownFrame = playerGui:FindFirstChild("CooldownFrame")
+        if cooldownFrame then
+            cooldownFrame.Visible = false
+        end
+        -- Atau modifikasi value cooldown remote
+        local castRemote = Utility:FindRemote("Cast")
+        if castRemote then
+            -- Hook agar cooldown tidak dicek
+        end
+    end
+end
+
+-- 18. Anti AFK
+local function antiAFK()
+    if Features.AntiAFK then
+        local vu = game:GetService("VirtualUser")
+        game:GetService("Players").LocalPlayer.Idled:Connect(function()
+            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            wait(1)
+            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end)
+    end
+end
+
+-- 19. God Mode
+local function godMode()
+    if Features.GodMode then
+        local char = Utility:GetCharacter()
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then
+            hum.MaxHealth = math.huge
+            hum.Health = math.huge
+        end
+    end
+end
+
+-- 20. Infinite Bait
+local function infiniteBait()
+    if Features.InfiniteBait then
+        -- Cari bait count di player stats
+        local stats = game.Players.LocalPlayer:FindFirstChild("leaderstats")
+        if stats and stats:FindFirstChild("Bait") then
+            stats.Bait.Value = 9999
+        end
+    end
+end
+
+-- 21. Auto Collect Rewards
+local function autoCollectRewards()
+    if Features.AutoCollectRewards then
+        -- Cari remote reward
+        local rewardRemote = Utility:FindRemote("ClaimReward")
+        if rewardRemote then
+            rewardRemote:FireServer()
+        end
+    end
+end
+
+-- 22. Auto Daily Reward
+local function autoDaily()
+    if Features.AutoDaily then
+        local dailyRemote = Utility:FindRemote("DailyReward")
+        if dailyRemote then
+            dailyRemote:FireServer()
+        end
+    end
+end
+
+-- 23. Auto Quest
+local function autoQuest()
+    if Features.AutoQuest then
+        -- Cari quest remote
+        local questRemote = Utility:FindRemote("CompleteQuest")
+        if questRemote then
+            questRemote:FireServer()
+        end
+    end
+end
+
+-- 24. Auto Buy Best Rod
+local function autoBuyBestRod()
+    if Features.AutoBuyBestRod then
+        -- Cari remote buy dengan rod termahal
+        local buyRemote = Utility:FindRemote("BuyRod")
+        if buyRemote then
+            buyRemote:FireServer("BestRod") -- nama rod
+        end
+    end
+end
+
+-- 25. Auto Upgrade
+local function autoUpgrade()
+    if Features.AutoUpgrade then
+        local upgradeRemote = Utility:FindRemote("UpgradeRod")
+        if upgradeRemote then
+            upgradeRemote:FireServer()
+        end
+    end
+end
+
+-- 26. Server Hop
+local function serverHop()
+    if Features.ServerHop then
+        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end
+end
+
+-- 27. Rejoin
+local function rejoin()
+    if Features.Rejoin then
+        game:GetService("TeleportService"):Teleport(game.PlaceId)
+    end
+end
+
+-- 28. FPS Booster
+local function fpsBooster()
+    if Features.FPSBooster then
+        -- Hapus partikel, efek, etc.
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Decal") or obj:IsA("Fire") or obj:IsA("Smoke") then
+                obj.Enabled = false
+            end
+        end
+        settings().Rendering.QualityLevel = 1
+    else
+        settings().Rendering.QualityLevel = 10
+    end
+end
+
+-- 29. Screenshot Mode
+local function screenshotMode()
+    if Features.ScreenshotMode then
+        -- Hapus semua GUI
+        for _, gui in pairs(game.CoreGui:GetChildren()) do
+            if gui.Name ~= "KimJongUI" then
+                gui.Enabled = false
+            end
+        end
+        -- Atur kamera, dll
+    else
+        for _, gui in pairs(game.CoreGui:GetChildren()) do
+            gui.Enabled = true
+        end
+    end
+end
+
+-- 30. Chat Spam
+local chatSpamLoop = nil
+local function chatSpam()
+    if Features.ChatSpam then
+        if not chatSpamLoop then
+            chatSpamLoop = task.spawn(function()
+                while Features.ChatSpam do
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("SayMessageRequest"):FireServer(Features.ChatSpamMessage, "All")
+                    end)
+                    wait(math.random(5,15))
+                end
+            end)
+        end
+    else
+        if chatSpamLoop then
+            task.cancel(chatSpamLoop)
+            chatSpamLoop = nil
+        end
+    end
+end
+
+-- 31. Anti-Report (mencegah report popup)
+local function antiReport()
+    if Features.AntiReport then
+        local reportGui = game.CoreGui:FindFirstChild("ReportGui")
+        if reportGui then
+            reportGui:Destroy()
+        end
+    end
+end
+
+-- 32. ESP Player, Item, NPC, Chest
+-- Implementasi serupa dengan Fish ESP tapi dengan warna berbeda
+
+-- 33. Fullbright, No Fog, No Water Effect, Custom FOV
+local function visualEffects()
+    if Features.Fullbright then
+        game.Lighting.Brightness = 2
+        game.Lighting.Ambient = Color3.fromRGB(255,255,255)
+        game.Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+    else
+        game.Lighting.Brightness = 1
+        game.Lighting.Ambient = Color3.fromRGB(0,0,0)
+        game.Lighting.OutdoorAmbient = Color3.fromRGB(0,0,0)
+    end
+    if Features.NoFog then
+        game.Lighting.FogEnd = 100000
+        game.Lighting.FogStart = 0
+    else
+        game.Lighting.FogEnd = 1000
+        game.Lighting.FogStart = 0
+    end
+    if Features.NoWaterEffect then
+        for _, water in pairs(workspace:GetDescendants()) do
+            if water:IsA("Water") then
+                water.Visible = false
+            end
+        end
+    end
+    if Features.CustomFOV then
+        workspace.CurrentCamera.FieldOfView = Features.FOVValue
+    else
+        workspace.CurrentCamera.FieldOfView = 70
+    end
+end
+
+-- [[ UI SETUP MENGGUNAKAN RAYFIELD ]]
+if RayfieldLoaded then
+    local Rayfield = Rayfield
+    local Window = Rayfield:CreateWindow({
+        Name = ScriptName.." "..ScriptVersion.." - "..GameName,
+        LoadingTitle = ScriptName,
+        LoadingSubtitle = "by KimJong",
+        ConfigurationSaving = {
+            Enabled = true,
+            FolderName = ScriptName,
+            FileName = "Settings"
+        },
+        Discord = {
+            Enabled = false
+        },
+        KeySystem = false
+    })
+
+    -- Tab Fishing
+    local FishingTab = Window:CreateTab("Fishing")
+    FishingTab:CreateToggle({
+        Name = "Auto Fish",
+        CurrentValue = Features.AutoFish,
+        Flag = "AutoFish",
+        Callback = function(v)
+            Features.AutoFish = v
+            if v then
+                if not autoFishCoroutine then
+                    autoFishCoroutine = task.spawn(autoFishLoop)
+                end
+            else
+                if autoFishCoroutine then
+                    task.cancel(autoFishCoroutine)
+                    autoFishCoroutine = nil
+                end
+            end
+        end
+    })
+    FishingTab:CreateToggle({
+        Name = "Auto Perfect Catch",
+        CurrentValue = Features.AutoPerfectCatch,
+        Flag = "AutoPerfectCatch",
+        Callback = function(v) Features.AutoPerfectCatch = v end
+    })
+    FishingTab:CreateToggle({
+        Name = "Auto Reel",
+        CurrentValue = Features.AutoReel,
+        Flag = "AutoReel",
+        Callback = function(v) Features.AutoReel = v end
+    })
+    FishingTab:CreateToggle({
+        Name = "Instant Fish",
+        CurrentValue = Features.InstantFish,
+        Flag = "InstantFish",
+        Callback = function(v)
+            Features.InstantFish = v
+            if v then
+                task.spawn(function()
+                    while Features.InstantFish do
+                        instantFish()
+                        wait(0.5)
+                    end
+                end)
+            end
+        end
+    })
+    FishingTab:CreateToggle({
+        Name = "Auto Sell Fish",
+        CurrentValue = Features.AutoSell,
+        Flag = "AutoSell",
+        Callback = function(v)
+            Features.AutoSell = v
+            if v then
+                task.spawn(autoSellLoop)
+            end
+        end
+    })
+    FishingTab:CreateToggle({
+        Name = "Fish ESP",
+        CurrentValue = Features.FishESP,
+        Flag = "FishESP",
+        Callback = function(v)
+            Features.FishESP = v
+            setupFishESP()
+        end
+    })
+    FishingTab:CreateToggle({
+        Name = "Rare Fish Notification",
+        CurrentValue = Features.RareFishNotify,
+        Flag = "RareFishNotify",
+        Callback = function(v)
+            Features.RareFishNotify = v
+            checkRareFish()
+        end
+    })
+    FishingTab:CreateToggle({
+        Name = "Auto Equip Best Rod",
+        CurrentValue = Features.AutoEquipBestRod,
+        Flag = "AutoEquipBestRod",
+        Callback = function(v)
+            Features.AutoEquipBestRod = v
+            if v then
+                task.spawn(function()
+                    while Features.AutoEquipBestRod do
+                        autoEquipBestRod()
+                        wait(10)
+                    end
+                end)
+            end
+        end
+    })
+    -- Custom Fish Target (dropdown)
+    local fishTypes = {"All", "Common", "Rare", "Legendary"} -- contoh
+    FishingTab:CreateDropdown({
+        Name = "Target Fish",
+        Options = fishTypes,
+        CurrentOption = "All",
+        Flag = "TargetFish",
+        Callback = function(v)
+            Features.TargetFish = v
+        end
+    })
+
+    -- Tab Movement/Teleport
+    local MovementTab = Window:CreateTab("Movement")
+    MovementTab:CreateSlider({
+        Name = "Speed Hack",
+        Range = {16, 50},
+        Increment = 1,
+        CurrentValue = Features.SpeedValue,
+        Flag = "SpeedHack",
+        Callback = function(v)
+            Features.SpeedValue = v
+            if Features.SpeedHack then
+                applySpeed()
+            end
+        end
+    })
+    MovementTab:CreateToggle({
+        Name = "Speed Hack Toggle",
+        CurrentValue = Features.SpeedHack,
+        Flag = "SpeedHackToggle",
+        Callback = function(v)
+            Features.SpeedHack = v
+            applySpeed()
+        end
+    })
+    MovementTab:CreateToggle({
+        Name = "Fly Hack",
+        CurrentValue = Features.FlyHack,
+        Flag = "FlyHack",
+        Callback = function(v)
+            Features.FlyHack = v
+            fly()
+        end
+    })
+    MovementTab:CreateToggle({
+        Name = "Noclip",
+        CurrentValue = Features.Noclip,
+        Flag = "Noclip",
+        Callback = function(v)
+            Features.Noclip = v
+            noclip()
+        end
+    })
+    MovementTab:CreateToggle({
+        Name = "Infinite Jump",
+        CurrentValue = Features.InfiniteJump,
+        Flag = "InfiniteJump",
+        Callback = function(v)
+            Features.InfiniteJump = v
+            infiniteJump()
+        end
+    })
+    MovementTab:CreateButton({
+        Name = "Teleport to Shop",
+        Callback = function()
+            teleportToLocation("Shop")
+        end
+    })
+    MovementTab:CreateButton({
+        Name = "Teleport to Sell Area",
+        Callback = function()
+            teleportToLocation("SellArea")
+        end
+    })
+    MovementTab:CreateButton({
+        Name = "Teleport to Event Area",
+        Callback = function()
+            teleportToLocation("EventArea")
+        end
+    })
+    -- Dropdown untuk fishing spots
+    local spotNames = {}
+    for _, spot in pairs(Utility:GetFishingSpots()) do
+        table.insert(spotNames, spot.Name)
+    end
+    MovementTab:CreateDropdown({
+        Name = "Teleport to Fishing Spot",
+        Options = spotNames,
+        CurrentOption = spotNames[1] or "",
+        Flag = "TeleportSpot",
+        Callback = function(v)
+            teleportToLocation(v)
+        end
+    })
+    MovementTab:CreateToggle({
+        Name = "Auto Farm Route",
+        CurrentValue = Features.AutoFarmRoute,
+        Flag = "AutoFarmRoute",
+        Callback = function(v)
+            Features.AutoFarmRoute = v
+            if v then
+                -- Isi route spots dengan semua fishing spots
+                routeSpots = {}
+                for _, spot in pairs(Utility:GetFishingSpots()) do
+                    table.insert(routeSpots, spot.Position + Vector3.new(0,3,0))
+                end
+                task.spawn(autoFarmLoop)
+            end
+        end
+    })
+
+    -- Tab ESP/Visual
+    local VisualTab = Window:CreateTab("Visual")
+    VisualTab:CreateToggle({
+        Name = "Fullbright",
+        CurrentValue = Features.Fullbright,
+        Flag = "Fullbright",
+        Callback = function(v)
+            Features.Fullbright = v
+            visualEffects()
+        end
+    })
+    VisualTab:CreateToggle({
+        Name = "No Fog",
+        CurrentValue = Features.NoFog,
+        Flag = "NoFog",
+        Callback = function(v)
+            Features.NoFog = v
+            visualEffects()
+        end
+    })
+    VisualTab:CreateToggle({
+        Name = "No Water Effect",
+        CurrentValue = Features.NoWaterEffect,
+        Flag = "NoWaterEffect",
+        Callback = function(v)
+            Features.NoWaterEffect = v
+            visualEffects()
+        end
+    })
+    VisualTab:CreateToggle({
+        Name = "Custom FOV",
+        CurrentValue = Features.CustomFOV,
+        Flag = "CustomFOV",
+        Callback = function(v)
+            Features.CustomFOV = v
+            visualEffects()
+        end
+    })
+    VisualTab:CreateSlider({
+        Name = "FOV Value",
+        Range = {1, 120},
+        Increment = 1,
+        CurrentValue = Features.FOVValue,
+        Flag = "FOVValue",
+        Callback = function(v)
+            Features.FOVValue = v
+            if Features.CustomFOV then
+                visualEffects()
+            end
+        end
+    })
+    -- Tambahkan toggle untuk ESP lainnya (Player, Item, dll) jika diperlukan
+
+    -- Tab Player
+    local PlayerTab = Window:CreateTab("Player")
+    PlayerTab:CreateToggle({
+        Name = "Infinite Stamina",
+        CurrentValue = Features.InfiniteStamina,
+        Flag = "InfiniteStamina",
+        Callback = function(v)
+            Features.InfiniteStamina = v
+            if v then
+                task.spawn(function()
+                    while Features.InfiniteStamina do
+                        infiniteStamina()
+                        wait(0.5)
+                    end
+                end)
+            end
+        end
+    })
+    PlayerTab:CreateToggle({
+        Name = "No Cooldown",
+        CurrentValue = Features.NoCooldown,
+        Flag = "NoCooldown",
+        Callback = function(v)
+            Features.NoCooldown = v
+            noCooldown()
+        end
+    })
+    PlayerTab:CreateToggle({
+        Name = "Anti AFK",
+        CurrentValue = Features.AntiAFK,
+        Flag = "AntiAFK",
+        Callback = function(v)
+            Features.AntiAFK = v
+            antiAFK()
+        end
+    })
+    PlayerTab:CreateToggle({
+        Name = "God Mode",
+        CurrentValue = Features.GodMode,
+        Flag = "GodMode",
+        Callback = function(v)
+            Features.GodMode = v
+            godMode()
+        end
+    })
+    PlayerTab:CreateToggle({
+        Name = "Infinite Bait",
+        CurrentValue = Features.InfiniteBait,
+        Flag = "InfiniteBait",
+        Callback = function(v)
+            Features.InfiniteBait = v
+            infiniteBait()
+        end
+    })
+
+    -- Tab Farm
+    local FarmTab = Window:CreateTab("Farm")
+    FarmTab:CreateToggle({
+        Name = "Auto Collect Rewards",
+        CurrentValue = Features.AutoCollectRewards,
+        Flag = "AutoCollectRewards",
+        Callback = function(v)
+            Features.AutoCollectRewards = v
+            if v then
+                task.spawn(function()
+                    while Features.AutoCollectRewards do
+                        autoCollectRewards()
+                        wait(30)
+                    end
+                end)
+            end
+        end
+    })
+    FarmTab:CreateToggle({
+        Name = "Auto Daily Reward",
+        CurrentValue = Features.AutoDaily,
+        Flag = "AutoDaily",
+        Callback = function(v)
+            Features.AutoDaily = v
+            if v then
+                task.spawn(function()
+                    while Features.AutoDaily do
+                        autoDaily()
+                        wait(3600) -- 1 jam
+                    end
+                end)
+            end
+        end
+    })
+    FarmTab:CreateToggle({
+        Name = "Auto Quest",
+        CurrentValue = Features.AutoQuest,
+        Flag = "AutoQuest",
+        Callback = function(v)
+            Features.AutoQuest = v
+            if v then
+                task.spawn(function()
+                    while Features.AutoQuest do
+                        autoQuest()
+                        wait(60)
+                    end
+                end)
+            end
+        end
+    })
+    FarmTab:CreateToggle({
+        Name = "Auto Buy Best Rod",
+        CurrentValue = Features.AutoBuyBestRod,
+        Flag = "AutoBuyBestRod",
+        Callback = function(v)
+            Features.AutoBuyBestRod = v
+            if v then
+                task.spawn(function()
+                    while Features.AutoBuyBestRod do
+                        autoBuyBestRod()
+                        wait(300)
+                    end
+                end)
+            end
+        end
+    })
+    FarmTab:CreateToggle({
+        Name = "Auto Upgrade",
+        CurrentValue = Features.AutoUpgrade,
+        Flag = "AutoUpgrade",
+        Callback = function(v)
+            Features.AutoUpgrade = v
+            if v then
+                task.spawn(function()
+                    while Features.AutoUpgrade do
+                        autoUpgrade()
+                        wait(60)
+                    end
+                end)
+            end
+        end
+    })
+
+    -- Tab Misc
+    local MiscTab = Window:CreateTab("Misc")
+    MiscTab:CreateToggle({
+        Name = "Server Hop",
+        CurrentValue = Features.ServerHop,
+        Flag = "ServerHop",
+        Callback = function(v)
+            Features.ServerHop = v
+            if v then
+                serverHop()
+            end
+        end
+    })
+    MiscTab:CreateToggle({
+        Name = "Rejoin Server",
+        CurrentValue = Features.Rejoin,
+        Flag = "Rejoin",
+        Callback = function(v)
+            Features.Rejoin = v
+            if v then
+                rejoin()
+            end
+        end
+    })
+    MiscTab:CreateToggle({
+        Name = "FPS Booster",
+        CurrentValue = Features.FPSBooster,
+        Flag = "FPSBooster",
+        Callback = function(v)
+            Features.FPSBooster = v
+            fpsBooster()
+        end
+    })
+    MiscTab:CreateToggle({
+        Name = "Screenshot Mode",
+        CurrentValue = Features.ScreenshotMode,
+        Flag = "ScreenshotMode",
+        Callback = function(v)
+            Features.ScreenshotMode = v
+            screenshotMode()
+        end
+    })
+    MiscTab:CreateToggle({
+        Name = "Chat Spam",
+        CurrentValue = Features.ChatSpam,
+        Flag = "ChatSpam",
+        Callback = function(v)
+            Features.ChatSpam = v
+            chatSpam()
+        end
+    })
+    MiscTab:CreateInput({
+        Name = "Chat Spam Message",
+        CurrentValue = Features.ChatSpamMessage,
+        Flag = "ChatSpamMessage",
+        Callback = function(v)
+            Features.ChatSpamMessage = v
+        end
+    })
+    MiscTab:CreateToggle({
+        Name = "Anti Report",
+        CurrentValue = Features.AntiReport,
+        Flag = "AntiReport",
+        Callback = function(v)
+            Features.AntiReport = v
+            antiReport()
+        end
+    })
+
+    -- Tab Settings
+    local SettingsTab = Window:CreateTab("Settings")
+    SettingsTab:CreateButton({
+        Name = "Destroy UI",
+        Callback = function()
+            Window:Destroy()
+            -- Hentikan semua loop
+            task.cancel(autoFishCoroutine)
+            -- dsb.
+        end
+    })
+    -- Keybind untuk membuka/tutup UI (RightShift)
+    game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.RightShift then
+            Window:Toggle()
+        end
+    end)
+
+else
+    -- Fallback UI sederhana menggunakan ScreenGui dan Frame
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "KimJongUI"
+    ScreenGui.Parent = game.CoreGui
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0, 400, 0, 500)
+    Frame.Position = UDim2.new(0.5, -200, 0.5, -250)
+    Frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    Frame.BorderSizePixel = 0
+    Frame.Parent = ScreenGui
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1,0,0,30)
+    Title.Text = ScriptName.." "..ScriptVersion
+    Title.TextColor3 = Color3.fromRGB(255,255,255)
+    Title.BackgroundTransparency = 1
+    Title.Parent = Frame
+    local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Size = UDim2.new(0,30,0,30)
+    CloseBtn.Position = UDim2.new(1,-30,0,0)
+    CloseBtn.Text = "X"
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(255,0,0)
+    CloseBtn.Parent = Frame
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+    end)
+    -- Tambahkan label info
+    local Info = Instance.new("TextLabel")
+    Info.Size = UDim2.new(1,0,0,50)
+    Info.Position = UDim2.new(0,0,0,30)
+    Info.Text = "UI Library not loaded. Using fallback.\nSome features may not work."
+    Info.TextColor3 = Color3.fromRGB(255,255,255)
+    Info.BackgroundTransparency = 1
+    Info.Parent = Frame
+    -- Notifikasi fallback
+    Utility:Notify("UI Warning", "Rayfield library not loaded, using fallback UI. Features may be limited.", 10)
+end
+
+-- [[ MAIN LOOP UNTUK UPDATE KONTINYU ]]
+task.spawn(function()
+    while true do
+        pcall(function()
+            -- Update fitur yang perlu continuous loop
+            if Features.SpeedHack then
+                applySpeed()
+            end
+            if Features.FlyHack then
+                fly()
+            end
+            if Features.Noclip then
+                noclip()
+            end
+            if Features.InfiniteStamina then
+                infiniteStamina()
+            end
+            if Features.GodMode then
+                godMode()
+            end
+            if Features.InfiniteBait then
+                infiniteBait()
+            end
+            if Features.AntiReport then
+                antiReport()
+            end
+            if Features.FishESP then
+                setupFishESP()
+            end
+            visualEffects()
+        end)
+        wait(0.5)
     end
 end)
 
--- CHARACTER RESPAWN HANDLER
-LP.CharacterAdded:Connect(function()
-    task.wait(1)
-    if S.speed then F.speed(true, S.speedVal) end
-    if S.noclip then F.noclip(true) end
-    if S.godMode then F.godMode(true) end
-    if S.fly then F.fly(true) end
-end)
+-- [[ CLEANUP ]]
+-- Tidak ada destroy otomatis, tapi user bisa menutup UI
+-- Fungsi cleanup bisa ditambahkan jika diperlukan
 
-KIMJONG_LOADED = true
-
-end) -- End of main pcall
-
--- ======================================
--- BOOT RESULT
--- ======================================
-if ok then
-    print("╔═══════════════════════════════════════╗")
-    print("║  ✅ Script KimJong v2.2 LOADED!       ║")
-    print("║  Toggle UI: RightShift                ║")
-    print("║  Educational purpose only              ║")
-    print("╚═══════════════════════════════════════╝")
-
-    pcall(function()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "✅ KimJong v2.2",
-            Text = "Loaded! Press RightShift to toggle UI",
-            Duration = 5,
-        })
-    end)
-else
-    warn("[KimJong] ERROR: " .. tostring(err))
-    pcall(function()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "❌ KimJong Error",
-            Text = tostring(err),
-            Duration = 10,
-        })
-    end)
-end
+-- [[ DISCLAIMER ]]
+print("Script loaded. This script is for educational purposes only. Use at your own risk.")
