@@ -1,1026 +1,3332 @@
 --[[
-    Script KimJong v2.0 - Fish It
-    Educational purpose only.
-    Use at your own risk.
-]]
+    ╔══════════════════════════════════════════════════════════════╗
+    ║              SCRIPT KIMJONG v2.0 - FISH IT                  ║
+    ║                                                              ║
+    ║  Author      : KimJong Dev Team                              ║
+    ║  Version     : 2.0                                           ║
+    ║  Game        : Fish It (Roblox)                              ║
+    ║  Platform    : Synapse X / Fluxus / Delta / etc.             ║
+    ║                                                              ║
+    ║  DISCLAIMER  : Educational purpose only.                     ║
+    ║  Penggunaan dalam game dapat melanggar Roblox TOS.           ║
+    ║  Penulis tidak bertanggung jawab atas segala konsekuensi.    ║
+    ╚══════════════════════════════════════════════════════════════╝
+--]]
 
-local ScriptVersion = "2.0"
+-- ============================================================
+-- SECTION 0: ENVIRONMENT CHECK & EXECUTOR COMPATIBILITY
+-- ============================================================
+local _ENV_CHECK = (function()
+    local _r = {}
+    _r._hm = hookmetamethod or nil
+    _r._hf = hookfunction or nil
+    _r._nc = newcclosure or function(f) return f end
+    _r._gc = getgc or nil
+    _r._gi = getinfo or debug.getinfo or nil
+    _r._gn = getnamecallmethod or nil
+    _r._sc = setclipboard or nil
+    _r._req = request or http_request or (syn and syn.request) or nil
+    _r._gc2 = getconnections or nil
+    _r._fr = firesignal or nil
+    _r._se = setsimulationradius or nil
+    _r._ip = isreadonly or nil
+    _r._sr = setreadonly or nil
+    _r._dw = Drawing and Drawing.new or nil
+    return _r
+end)()
 
--- ===============================
--- ANTI DETECTION & BYPASS MODULE
--- ===============================
-local AntiDetection = {}
-local OriginalKick = nil
-local Player = game:GetService("Players").LocalPlayer
+-- ============================================================
+-- SECTION 1: ANTI-DETECTION MODULE (PRIORITAS UTAMA)
+-- ============================================================
 
--- Obfuscated strings (example)
-local function obf(str) -- not used heavily, but kept
-    local bytes = {}
-    for i = 1, #str do
-        bytes[i] = string.byte(str, i)
-    end
-    return table.concat(bytes, ",")
-end
-
-local function deobf(str)
-    local bytes = {}
-    for v in string.gmatch(str, "[^,]+") do
-        table.insert(bytes, tonumber(v))
-    end
-    return string.char(unpack(bytes))
-end
-
--- Remote spoofing & namecall hook
-local oldNamecall
-local oldIndex
-local hookedRemotes = {}
-local function remoteHook()
-    local mt = getrawmetatable(game)
-    if not mt then return end
-    oldNamecall = mt.__namecall
-    oldIndex = mt.__index
-    setreadonly(mt, false)
-    
-    mt.__namecall = function(self, ...)
-        local args = {...}
-        local method = getnamecallmethod()
-        local isRemote = false
-        local remoteName = tostring(self)
-        -- Spoofing logic: if it's a remote send, modify arguments to look legit
-        if method == "FireServer" or method == "InvokeServer" then
-            -- Add random delays
-            task.wait(math.random() * 0.1 + 0.05)
-            -- Spoof arguments for known remotes (example)
-            if string.find(remoteName, "Cast") or string.find(remoteName, "Fish") then
-                -- Add human-like randomness
-                if type(args[1]) == "table" then
-                    -- add random delay param
-                    args[1]._rand = tick() % 1000
-                end
-            end
-        end
-        return oldNamecall(self, unpack(args))
-    end
-    
-    mt.__index = function(self, key)
-        -- Intercept getconnections to hide anti-cheat connections
-        if key == "GetPropertyChangedSignal" or key == "Changed" then
-            -- maybe modify behavior
-        end
-        return oldIndex(self, key)
-    end
-    
-    setreadonly(mt, true)
-end
-
--- Anti-kick
-local function antiKick()
-    local kickFunc = Player.Kick
-    OriginalKick = kickFunc
-    Player.Kick = function(self, ...)
-        -- Block kick or spoof
-        warn("[Anti-Kick] Blocked kick attempt")
-        return nil
-    end
-end
-
--- Position spoofing (ghost position) - simplified
-local function positionSpoof()
-    -- Not fully implemented, but will keep as placeholder
-end
-
--- Integrity check bypass: disconnect anti-cheat connections
-local function bypassHeartbeat()
-    for _, v in pairs(getconnections(game:GetService("RunService").Heartbeat)) do
-        if v.Function and tostring(v.Function):match("anti") or tostring(v.Function):match("cheat") then
-            v:Disable()
-        end
-    end
-end
-
--- Random delay generator
-local function randomDelay(minSec, maxSec)
-    task.wait(math.random() * (maxSec - minSec) + minSec)
-end
-
--- Hook anti-cheat scripts: disable them
-local function killAntiCheatScripts()
-    for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("LocalScript") and (v.Name:lower():find("anti") or v.Name:lower():find("cheat")) then
-            pcall(function() v:Destroy() end)
-        end
-    end
-end
-
--- Initialize all bypasses
-local function initAntiDetection()
-    pcall(remoteHook)
-    pcall(antiKick)
-    pcall(positionSpoof)
-    pcall(bypassHeartbeat)
-    pcall(killAntiCheatScripts)
-end
-
-initAntiDetection()
-
--- ===============================
--- UTILITY FUNCTIONS
--- ===============================
-local Utility = {}
-
--- Find a remote event/function by pattern
-function Utility.findRemote(pattern)
-    local remotes = {}
-    local function search(obj)
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            if not pattern or obj.Name:lower():find(pattern) then
-                table.insert(remotes, obj)
-            end
-        end
-        for _, child in ipairs(obj:GetChildren()) do
-            search(child)
-        end
-    end
-    search(game:GetService("ReplicatedStorage"))
-    search(Player.PlayerScripts)
-    search(Player.Backpack)
-    return remotes
-end
-
--- Random wait
-function Utility.delayedWait(min, max)
-    local delay = math.random() * (max - min) + min
-    task.wait(delay)
-end
-
--- Safely get character parts
-function Utility.getChar()
-    return Player.Character or Player.CharacterAdded:Wait()
-end
-
--- Teleport function
-function Utility.teleport(cframe)
-    local char = Utility.getChar()
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.CFrame = cframe
-    end
-end
-
--- Get fishing spots from workspace (heuristic)
-function Utility.getFishingSpots()
-    local spots = {}
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:IsA("Part") and (v.Name:lower():find("fish") or v.Name:lower():find("spot") or v.Name:lower():find("water")) then
-            table.insert(spots, v)
-        end
-    end
-    return spots
-end
-
--- Find all fish models
-function Utility.getFish()
-    local fish = {}
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Name:lower():find("fish") then
-            table.insert(fish, v)
-        end
-    end
-    return fish
-end
-
--- Simple notification
-function Utility.notify(msg, duration)
-    local notif = Instance.new("TextLabel")
-    notif.Size = UDim2.new(0, 300, 0, 50)
-    notif.Position = UDim2.new(0.5, -150, 0.1, 0)
-    notif.Text = msg
-    notif.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    notif.TextColor3 = Color3.fromRGB(255,255,255)
-    notif.BackgroundTransparency = 0.3
-    notif.BorderSizePixel = 0
-    notif.Font = Enum.Font.GothamBold
-    notif.TextSize = 18
-    notif.Parent = game:GetService("CoreGui")
-    task.wait(duration or 3)
-    notif:Destroy()
-end
-
--- ===============================
--- FEATURE MANAGER
--- ===============================
-local Features = {
-    autoFish = false,
-    autoPerfect = false,
-    autoReel = false,
-    instantFish = false,
-    autoSell = false,
-    fishESP = false,
-    rareNotif = false,
-    autoEquipBestRod = false,
-    customTarget = nil,
-    speedHack = false,
-    speedValue = 16,
-    flyHack = false,
-    noclip = false,
-    teleportTo = nil,
-    autoFarmRoute = false,
-    infiniteJump = false,
-    playerESP = false,
-    itemESP = false,
-    npcESP = false,
-    treasureESP = false,
-    fullbright = false,
-    noFog = false,
-    noWaterEffect = false,
-    customFOV = nil,
-    infiniteStamina = false,
-    noCooldown = false,
-    antiAFK = false,
-    godMode = false,
-    infiniteBait = false,
-    autoCollectRewards = false,
-    autoDaily = false,
-    autoQuest = false,
-    autoBuyBestRod = false,
-    autoUpgrade = false,
-    serverHop = false,
-    rejoin = false,
-    fpsBooster = false,
-    screenshotMode = false,
-    chatSpam = false,
-    spamMessage = "",
-    antiReport = false,
+-- Encoded strings menggunakan string.char untuk menghindari string scanning
+local _STR = {
+    -- "Kick" encoded
+    _k = string.char(75,105,99,107),
+    -- "RemoteEvent"
+    _re = string.char(82,101,109,111,116,101,69,118,101,110,116),
+    -- "RemoteFunction"
+    _rf = string.char(82,101,109,111,116,101,70,117,110,99,116,105,111,110),
+    -- "FireServer"
+    _fs = string.char(70,105,114,101,83,101,114,118,101,114),
+    -- "InvokeServer"
+    _is = string.char(73,110,118,111,107,101,83,101,114,118,101,114),
+    -- "Humanoid"
+    _hm = string.char(72,117,109,97,110,111,105,100),
+    -- "WalkSpeed"
+    _ws = string.char(87,97,108,107,83,112,101,101,100),
+    -- "JumpPower"
+    _jp = string.char(74,117,109,112,80,111,119,101,114),
+    -- "HumanoidRootPart"
+    _hrp = string.char(72,117,109,97,110,111,105,100,82,111,111,116,80,97,114,116),
+    -- "Workspace"
+    _wsp = string.char(87,111,114,107,115,112,97,99,101),
+    -- "__namecall"
+    _nc = string.char(95,95,110,97,109,101,99,97,108,108),
+    -- "__index"
+    _idx = string.char(95,95,105,110,100,101,120),
+    -- "__newindex"
+    _nidx = string.char(95,95,110,101,119,105,110,100,101,120),
+    -- "Character"
+    _chr = string.char(67,104,97,114,97,99,116,101,114),
+    -- "CFrame"
+    _cf = string.char(67,70,114,97,109,101),
+    -- "Position"
+    _pos = string.char(80,111,115,105,116,105,111,110),
 }
 
-local Toggles = {} -- store connections for cleanup
-local ESPObjects = {} -- for storing ESP objects
+-- Randomized variable names generator
+local function _rng_name()
+    local _c = {}
+    for _i = 1, math.random(8, 16) do
+        _c[_i] = string.char(math.random(97, 122))
+    end
+    return table.concat(_c)
+end
 
--- Helper to toggle feature
-local function setFeature(name, state)
-    Features[name] = state
-    if state then
-        -- start the feature logic
-        if name == "autoFish" then
-            Toggles.autoFish = task.spawn(function()
-                while Features.autoFish do
-                    local castRemotes = Utility.findRemote("cast")
-                    if #castRemotes > 0 then
-                        pcall(function() castRemotes[1]:FireServer() end)
+-- Random delay untuk anti-pattern detection
+local function _rnd_delay(min, max)
+    min = min or 0.1
+    max = max or 0.5
+    local _d = min + math.random() * (max - min)
+    task.wait(_d)
+    return _d
+end
+
+-- Services (cached)
+local _S = {}
+local function _gs(name)
+    if not _S[name] then
+        local _ok, _sv = pcall(function()
+            return cloneref and cloneref(game:GetService(name)) or game:GetService(name)
+        end)
+        if _ok then _S[name] = _sv end
+    end
+    return _S[name]
+end
+
+local _Players = _gs("Players")
+local _RS = _gs("ReplicatedStorage")
+local _WS = _gs("Workspace")
+local _UIS = _gs("UserInputService")
+local _RunS = _gs("RunService")
+local _TS = _gs("TweenService")
+local _SG = _gs("StarterGui")
+local _LP = _Players.LocalPlayer
+local _Lighting = _gs("Lighting")
+local _TP = _gs("TeleportService")
+local _HttpS = _gs("HttpService")
+
+-- ============================================================
+-- SECTION 1A: ANTI-CHEAT BYPASS CORE
+-- ============================================================
+local _AC_Module = {}
+_AC_Module._hooks = {}
+_AC_Module._originals = {}
+_AC_Module._spoofed_speed = 16
+_AC_Module._spoofed_jump = 50
+_AC_Module._real_speed = 16
+_AC_Module._real_jump = 50
+_AC_Module._ghost_pos = nil
+_AC_Module._enabled = true
+_AC_Module._blocked_remotes = {}
+_AC_Module._intercepted = {}
+
+-- Hook __namecall untuk intercept remote calls
+local function _setup_namecall_hook()
+    if not _ENV_CHECK._hm then
+        warn("[KimJong] hookmetamethod not available, skipping namecall hook")
+        return false
+    end
+
+    local _old_nc
+    _old_nc = hookmetamethod(game, _STR._nc, _ENV_CHECK._nc(function(self, ...)
+        local _args = {...}
+        local _method = getnamecallmethod()
+
+        -- Anti-Kick bypass
+        if _method == _STR._k then
+            if _AC_Module._enabled then
+                return -- Block kick
+            end
+        end
+
+        -- Remote spoofing
+        if _method == _STR._fs or _method == _STR._is then
+            local _remote_name = ""
+            pcall(function() _remote_name = self.Name end)
+
+            -- Block anti-cheat remotes
+            if _AC_Module._blocked_remotes[_remote_name] then
+                return
+            end
+
+            -- Spoof speed/position related remotes
+            if _AC_Module._enabled then
+                for _i, _v in ipairs(_args) do
+                    if type(_v) == "number" then
+                        -- Spoof walkspeed values
+                        if _v == _AC_Module._real_speed and _AC_Module._real_speed ~= 16 then
+                            _args[_i] = _AC_Module._spoofed_speed
+                        end
+                    elseif typeof(_v) == "CFrame" and _AC_Module._ghost_pos then
+                        -- Spoof position
+                        _args[_i] = _AC_Module._ghost_pos
+                    elseif typeof(_v) == "Vector3" and _AC_Module._ghost_pos then
+                        _args[_i] = _AC_Module._ghost_pos.Position
                     end
-                    Utility.delayedWait(1, 3)
+                end
+            end
+
+            -- Log intercepted calls for analysis
+            if #_AC_Module._intercepted < 500 then
+                table.insert(_AC_Module._intercepted, {
+                    name = _remote_name,
+                    method = _method,
+                    time = tick()
+                })
+            end
+
+            return _old_nc(self, unpack(_args))
+        end
+
+        return _old_nc(self, ...)
+    end))
+
+    _AC_Module._originals["namecall"] = _old_nc
+    return true
+end
+
+-- Hook __index untuk spoof Humanoid properties
+local function _setup_index_hook()
+    if not _ENV_CHECK._hm then return false end
+
+    local _old_idx
+    _old_idx = hookmetamethod(game, _STR._idx, _ENV_CHECK._nc(function(self, key)
+        if _AC_Module._enabled then
+            -- Spoof WalkSpeed reading
+            if key == _STR._ws then
+                local _ok, _cls = pcall(function() return self.ClassName end)
+                if _ok and _cls == _STR._hm then
+                    if checkcaller and not checkcaller() then
+                        return _AC_Module._spoofed_speed
+                    end
+                end
+            end
+
+            -- Spoof JumpPower reading
+            if key == _STR._jp then
+                local _ok, _cls = pcall(function() return self.ClassName end)
+                if _ok and _cls == _STR._hm then
+                    if checkcaller and not checkcaller() then
+                        return _AC_Module._spoofed_jump
+                    end
+                end
+            end
+        end
+
+        return _old_idx(self, key)
+    end))
+
+    _AC_Module._originals["index"] = _old_idx
+    return true
+end
+
+-- Hook __newindex untuk intercept property changes dari anti-cheat
+local function _setup_newindex_hook()
+    if not _ENV_CHECK._hm then return false end
+
+    local _old_nidx
+    _old_nidx = hookmetamethod(game, _STR._nidx, _ENV_CHECK._nc(function(self, key, value)
+        if _AC_Module._enabled then
+            local _ok, _cls = pcall(function() return self.ClassName end)
+            if _ok and _cls == _STR._hm then
+                -- Prevent anti-cheat from resetting WalkSpeed
+                if key == _STR._ws then
+                    if checkcaller and not checkcaller() then
+                        if value == 16 and _AC_Module._real_speed ~= 16 then
+                            return _old_nidx(self, key, _AC_Module._real_speed)
+                        end
+                    end
+                end
+                -- Prevent anti-cheat from resetting JumpPower
+                if key == _STR._jp then
+                    if checkcaller and not checkcaller() then
+                        if value == 50 and _AC_Module._real_jump ~= 50 then
+                            return _old_nidx(self, key, _AC_Module._real_jump)
+                        end
+                    end
+                end
+            end
+        end
+        return _old_nidx(self, key, value)
+    end))
+
+    _AC_Module._originals["newindex"] = _old_nidx
+    return true
+end
+
+-- Disconnect anti-cheat connections
+local function _disconnect_ac_connections()
+    if not _ENV_CHECK._gc2 then return false end
+
+    pcall(function()
+        -- Disconnect RenderStepped anti-cheat checks
+        local _conns = getconnections(_RunS.RenderStepped)
+        for _, _c in ipairs(_conns) do
+            pcall(function()
+                if _c.Function then
+                    local _info = getinfo and getinfo(_c.Function) or nil
+                    if _info then
+                        local _src = _info.source or ""
+                        -- Disconnect suspicious anti-cheat connections
+                        if string.find(_src, "anti") or
+                           string.find(_src, "cheat") or
+                           string.find(_src, "detect") or
+                           string.find(_src, "security") or
+                           string.find(_src, "validation") then
+                            _c:Disable()
+                        end
+                    end
                 end
             end)
-        elseif name == "autoReel" then
-            Toggles.autoReel = task.spawn(function()
-                while Features.autoReel do
-                    -- find reel remote and fire
-                    local reelRemotes = Utility.findRemote("reel")
-                    if #reelRemotes > 0 then
-                        pcall(function() reelRemotes[1]:FireServer() end)
+        end
+
+        -- Same for Heartbeat
+        local _hb_conns = getconnections(_RunS.Heartbeat)
+        for _, _c in ipairs(_hb_conns) do
+            pcall(function()
+                if _c.Function then
+                    local _info = getinfo and getinfo(_c.Function) or nil
+                    if _info then
+                        local _src = _info.source or ""
+                        if string.find(_src, "anti") or
+                           string.find(_src, "cheat") or
+                           string.find(_src, "detect") then
+                            _c:Disable()
+                        end
                     end
-                    Utility.delayedWait(0.2, 0.8)
                 end
             end)
-        elseif name == "autoPerfect" then
-            -- hook into the perfect catch remote
-            Toggles.autoPerfect = task.spawn(function()
-                while Features.autoPerfect do
-                    local perfectRemotes = Utility.findRemote("perfect")
-                    if #perfectRemotes > 0 then
-                        pcall(function() perfectRemotes[1]:FireServer() end)
-                    end
-                    Utility.delayedWait(0.1, 0.3)
-                end
-            end)
-        elseif name == "instantFish" then
-            Toggles.instantFish = task.spawn(function()
-                while Features.instantFish do
-                    -- simulate instant catch
-                    local catchRemotes = Utility.findRemote("catch")
-                    if #catchRemotes > 0 then
-                        pcall(function() catchRemotes[1]:FireServer() end)
-                    end
-                    Utility.delayedWait(0.5, 1)
-                end
-            end)
-        elseif name == "autoSell" then
-            Toggles.autoSell = task.spawn(function()
-                while Features.autoSell do
-                    -- find sell remote
-                    local sellRemotes = Utility.findRemote("sell")
-                    if #sellRemotes > 0 then
-                        pcall(function() sellRemotes[1]:FireServer() end)
-                    end
-                    Utility.delayedWait(2, 5)
-                end
-            end)
-        elseif name == "speedHack" then
-            local char = Utility.getChar()
-            local humanoid = char and char:FindFirstChild("Humanoid")
-            if humanoid then
-                Toggles.speedHack = game:GetService("RunService").Heartbeat:Connect(function()
-                    if Features.speedHack and humanoid then
-                        humanoid.WalkSpeed = Features.speedValue
-                    elseif not Features.speedHack and humanoid then
-                        humanoid.WalkSpeed = 16
+        end
+    end)
+
+    return true
+end
+
+-- Scan and block anti-cheat remotes
+local function _scan_ac_remotes()
+    pcall(function()
+        local function _scan_folder(folder)
+            for _, _child in ipairs(folder:GetDescendants()) do
+                pcall(function()
+                    if _child:IsA(_STR._re) or _child:IsA(_STR._rf) then
+                        local _name = _child.Name:lower()
+                        if string.find(_name, "anti") or
+                           string.find(_name, "cheat") or
+                           string.find(_name, "detect") or
+                           string.find(_name, "heartbeat") or
+                           string.find(_name, "integrity") or
+                           string.find(_name, "valid") or
+                           string.find(_name, "check") or
+                           string.find(_name, "security") or
+                           string.find(_name, "report") then
+                            _AC_Module._blocked_remotes[_child.Name] = true
+                        end
                     end
                 end)
             end
-        elseif name == "flyHack" then
-            Toggles.flyHack = task.spawn(function()
-                local flying = false
-                local bodyVelocity = nil
-                local char = Utility.getChar()
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                while Features.flyHack do
-                    if not flying then
-                        flying = true
-                        bodyVelocity = Instance.new("BodyVelocity")
-                        bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-                        bodyVelocity.Velocity = Vector3.new(0,0,0)
-                        bodyVelocity.Parent = hrp
-                    end
-                    local move = Vector3.new()
-                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then move = move + Vector3.new(0,0,-1) end
-                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then move = move + Vector3.new(0,0,1) end
-                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then move = move + Vector3.new(-1,0,0) end
-                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then move = move + Vector3.new(1,0,0) end
-                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0,1,0) end
-                    if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then move = move + Vector3.new(0,-1,0) end
-                    move = move.Unit * 50
-                    if bodyVelocity then bodyVelocity.Velocity = move end
-                    task.wait()
+        end
+
+        _scan_folder(_RS)
+        if game:FindFirstChild("ReplicatedFirst") then
+            _scan_folder(game.ReplicatedFirst)
+        end
+    end)
+end
+
+-- Ghost position updater (spoof position ke server)
+local function _update_ghost_pos()
+    pcall(function()
+        local _char = _LP.Character or _LP.CharacterAdded:Wait()
+        local _hrp = _char:FindFirstChild(_STR._hrp)
+        if _hrp then
+            _AC_Module._ghost_pos = _hrp.CFrame
+        end
+    end)
+end
+
+-- Initialize all anti-detection
+local function _init_anti_detection()
+    local _results = {}
+    _results.namecall = _setup_namecall_hook()
+    _results.index = _setup_index_hook()
+    _results.newindex = _setup_newindex_hook()
+    _results.connections = _disconnect_ac_connections()
+    _scan_ac_remotes()
+
+    -- Periodic ghost position update
+    task.spawn(function()
+        while _AC_Module._enabled do
+            _update_ghost_pos()
+            task.wait(1 + math.random() * 2)
+        end
+    end)
+
+    -- Periodic re-scan for new anti-cheat remotes
+    task.spawn(function()
+        while _AC_Module._enabled do
+            task.wait(30 + math.random() * 30)
+            _scan_ac_remotes()
+            _disconnect_ac_connections()
+        end
+    end)
+
+    return _results
+end
+
+-- ============================================================
+-- SECTION 2: UTILITY FUNCTIONS
+-- ============================================================
+
+local _Util = {}
+
+-- Safe character/humanoid getter
+function _Util.getCharacter()
+    local _ok, _char = pcall(function()
+        return _LP.Character or _LP.CharacterAdded:Wait()
+    end)
+    return _ok and _char or nil
+end
+
+function _Util.getHumanoid()
+    local _char = _Util.getCharacter()
+    if _char then
+        return _char:FindFirstChildOfClass(_STR._hm)
+    end
+    return nil
+end
+
+function _Util.getHRP()
+    local _char = _Util.getCharacter()
+    if _char then
+        return _char:FindFirstChild(_STR._hrp)
+    end
+    return nil
+end
+
+-- Safe remote finder
+function _Util.findRemote(name, parent)
+    parent = parent or _RS
+    local _result = nil
+    pcall(function()
+        -- Search by exact name
+        _result = parent:FindFirstChild(name, true)
+    end)
+    if not _result then
+        pcall(function()
+            -- Search by partial match
+            for _, _d in ipairs(parent:GetDescendants()) do
+                if (_d:IsA(_STR._re) or _d:IsA(_STR._rf)) and
+                   string.find(_d.Name:lower(), name:lower()) then
+                    _result = _d
+                    break
                 end
-                if bodyVelocity then bodyVelocity:Destroy() end
-            end)
-        elseif name == "noclip" then
-            Toggles.noclip = game:GetService("RunService").Stepped:Connect(function()
-                if Features.noclip then
-                    local char = Utility.getChar()
-                    for _, part in ipairs(char:GetChildren()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
+            end
+        end)
+    end
+    return _result
+end
+
+-- Safe remote fire
+function _Util.fireRemote(remote, ...)
+    if not remote then return false end
+    local _ok, _err = pcall(function()
+        _rnd_delay(0.05, 0.2)
+        if remote:IsA(_STR._re) then
+            remote:FireServer(...)
+        elseif remote:IsA(_STR._rf) then
+            return remote:InvokeServer(...)
+        end
+    end)
+    return _ok
+end
+
+-- Teleport with tween (less suspicious)
+function _Util.tweenTo(target_cf, speed)
+    speed = speed or 100
+    local _hrp = _Util.getHRP()
+    if not _hrp then return false end
+
+    local _dist = (_hrp.Position - target_cf.Position).Magnitude
+    local _time = _dist / speed
+
+    if _time < 0.1 then _time = 0.1 end
+    if _time > 15 then _time = 15 end
+
+    local _tween_info = TweenInfo.new(_time, Enum.EasingStyle.Linear)
+    local _tween = _TS:Create(_hrp, _tween_info, {CFrame = target_cf})
+    _tween:Play()
+    _tween.Completed:Wait()
+    return true
+end
+
+-- Instant teleport
+function _Util.teleportTo(target_cf)
+    local _hrp = _Util.getHRP()
+    if not _hrp then return false end
+    pcall(function()
+        _hrp.CFrame = target_cf
+    end)
+    return true
+end
+
+-- Notification
+function _Util.notify(title, text, duration)
+    pcall(function()
+        _SG:SetCore("SendNotification", {
+            Title = title or "Script KimJong",
+            Text = text or "",
+            Duration = duration or 3,
+        })
+    end)
+end
+
+-- Find game objects
+function _Util.findInWorkspace(name, class)
+    local _results = {}
+    pcall(function()
+        for _, _obj in ipairs(_WS:GetDescendants()) do
+            local _match = true
+            if name then
+                _match = _match and (string.find(_obj.Name:lower(), name:lower()) ~= nil)
+            end
+            if class then
+                _match = _match and _obj:IsA(class)
+            end
+            if _match then
+                table.insert(_results, _obj)
+            end
+        end
+    end)
+    return _results
+end
+
+-- ============================================================
+-- SECTION 3: GAME ANALYSIS MODULE
+-- ============================================================
+
+local _GameData = {
+    -- Detected remotes
+    remotes = {
+        cast = nil,      -- Casting rod
+        catch = nil,     -- Catching fish
+        reel = nil,      -- Reeling
+        sell = nil,      -- Selling fish
+        buy = nil,       -- Buying items
+        equip = nil,     -- Equip rod
+        collect = nil,   -- Collect rewards
+        quest = nil,     -- Quest related
+        bait = nil,      -- Bait related
+        upgrade = nil,   -- Upgrade related
+    },
+    -- Detected locations
+    locations = {
+        fishing_spots = {},
+        shop = nil,
+        sell_area = nil,
+        event_area = nil,
+        secret_spots = {},
+        spawn = nil,
+    },
+    -- Fish data
+    fish_models = {},
+    -- NPCs
+    npcs = {},
+    -- Treasure/Chests
+    treasures = {},
+    -- Game state
+    analyzed = false,
+}
+
+local function _analyze_game()
+    -- Scan all remotes
+    pcall(function()
+        local _remote_folders = {_RS}
+
+        -- Check common remote storage locations
+        local _common_paths = {
+            _RS:FindFirstChild("Remotes"),
+            _RS:FindFirstChild("Events"),
+            _RS:FindFirstChild("Network"),
+            _RS:FindFirstChild("Communication"),
+            _RS:FindFirstChild("Remote"),
+            _RS:FindFirstChild("Shared"),
+        }
+
+        for _, _f in ipairs(_common_paths) do
+            if _f then table.insert(_remote_folders, _f) end
+        end
+
+        for _, _folder in ipairs(_remote_folders) do
+            for _, _obj in ipairs(_folder:GetDescendants()) do
+                if _obj:IsA(_STR._re) or _obj:IsA(_STR._rf) then
+                    local _n = _obj.Name:lower()
+
+                    if string.find(_n, "cast") or string.find(_n, "throw") or string.find(_n, "rod") then
+                        _GameData.remotes.cast = _obj
+                    elseif string.find(_n, "catch") or string.find(_n, "grab") or string.find(_n, "hook") then
+                        _GameData.remotes.catch = _obj
+                    elseif string.find(_n, "reel") or string.find(_n, "pull") then
+                        _GameData.remotes.reel = _obj
+                    elseif string.find(_n, "sell") then
+                        _GameData.remotes.sell = _obj
+                    elseif string.find(_n, "buy") or string.find(_n, "purchase") then
+                        _GameData.remotes.buy = _obj
+                    elseif string.find(_n, "equip") then
+                        _GameData.remotes.equip = _obj
+                    elseif string.find(_n, "collect") or string.find(_n, "claim") or string.find(_n, "reward") then
+                        _GameData.remotes.collect = _obj
+                    elseif string.find(_n, "quest") or string.find(_n, "mission") then
+                        _GameData.remotes.quest = _obj
+                    elseif string.find(_n, "bait") then
+                        _GameData.remotes.bait = _obj
+                    elseif string.find(_n, "upgrade") then
+                        _GameData.remotes.upgrade = _obj
+                    elseif string.find(_n, "fish") and not string.find(_n, "anti") then
+                        -- Could be fishing remote
+                        if not _GameData.remotes.cast then
+                            _GameData.remotes.cast = _obj
                         end
                     end
-                else
-                    local char = Utility.getChar()
-                    for _, part in ipairs(char:GetChildren()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = true
+                end
+            end
+        end
+    end)
+
+    -- Scan workspace for locations and objects
+    pcall(function()
+        for _, _obj in ipairs(_WS:GetDescendants()) do
+            local _n = _obj.Name:lower()
+
+            -- Fishing spots
+            if (string.find(_n, "fish") and string.find(_n, "spot")) or
+               (string.find(_n, "fishing") and string.find(_n, "zone")) or
+               string.find(_n, "fishingspot") or
+               string.find(_n, "fishspot") or
+               string.find(_n, "castzone") then
+                table.insert(_GameData.locations.fishing_spots, _obj)
+            end
+
+            -- Shop
+            if string.find(_n, "shop") or string.find(_n, "store") or string.find(_n, "toko") then
+                if _obj:IsA("Model") or _obj:IsA("Part") or _obj:IsA("BasePart") then
+                    _GameData.locations.shop = _obj
+                end
+            end
+
+            -- Sell area
+            if string.find(_n, "sell") and (string.find(_n, "area") or string.find(_n, "zone") or string.find(_n, "npc")) then
+                _GameData.locations.sell_area = _obj
+            end
+
+            -- Event area
+            if string.find(_n, "event") then
+                if _obj:IsA("Model") or _obj:IsA("Part") then
+                    _GameData.locations.event_area = _obj
+                end
+            end
+
+            -- Secret spots
+            if string.find(_n, "secret") or string.find(_n, "hidden") or string.find(_n, "rare") then
+                if _obj:IsA("Model") or _obj:IsA("Part") then
+                    table.insert(_GameData.locations.secret_spots, _obj)
+                end
+            end
+
+            -- Fish models
+            if string.find(_n, "fish") and (_obj:IsA("Model") or _obj:IsA("MeshPart")) then
+                if _obj.Parent and not string.find(_obj.Parent.Name:lower(), "player") then
+                    table.insert(_GameData.fish_models, _obj)
+                end
+            end
+
+            -- NPCs
+            if _obj:IsA("Model") and _obj:FindFirstChildOfClass("Humanoid") then
+                if _obj ~= (_LP.Character) then
+                    local _is_player = false
+                    for _, _p in ipairs(_Players:GetPlayers()) do
+                        if _p.Character == _obj then _is_player = true; break end
+                    end
+                    if not _is_player then
+                        table.insert(_GameData.npcs, _obj)
+                    end
+                end
+            end
+
+            -- Treasures/Chests
+            if string.find(_n, "chest") or string.find(_n, "treasure") or
+               string.find(_n, "crate") or string.find(_n, "loot") then
+                table.insert(_GameData.treasures, _obj)
+            end
+        end
+
+        -- Get spawn location
+        local _spawn = _WS:FindFirstChild("SpawnLocation") or _WS:FindFirstChild("Spawn")
+        if _spawn then
+            _GameData.locations.spawn = _spawn
+        end
+    end)
+
+    _GameData.analyzed = true
+end
+
+-- ============================================================
+-- SECTION 4: FEATURE MODULES
+-- ============================================================
+
+local _Features = {}
+local _Connections = {} -- Store all connections for cleanup
+local _States = {       -- All toggle states
+    -- Fishing
+    auto_fish = false,
+    auto_perfect = false,
+    auto_reel = false,
+    instant_fish = false,
+    auto_sell = false,
+    fish_esp = false,
+    rare_notify = false,
+    auto_equip_rod = false,
+    target_fish = "All",
+
+    -- Movement
+    speed_hack = false,
+    speed_value = 16,
+    fly_hack = false,
+    noclip = false,
+    infinite_jump = false,
+    auto_farm_route = false,
+
+    -- Visual
+    player_esp = false,
+    item_esp = false,
+    npc_esp = false,
+    treasure_esp = false,
+    fullbright = false,
+    no_fog = false,
+    no_water = false,
+    fov_value = 70,
+
+    -- Player
+    inf_stamina = false,
+    no_cooldown = false,
+    anti_afk = false,
+    god_mode = false,
+    inf_bait = false,
+
+    -- Economy
+    auto_collect = false,
+    auto_daily = false,
+    auto_quest = false,
+    auto_buy_rod = false,
+    auto_upgrade = false,
+
+    -- Utility
+    fps_boost = false,
+    chat_spam = false,
+    chat_message = "Script KimJong v2.0",
+
+    -- Settings
+    ac_bypass = true,
+}
+
+-- Connection manager
+local function _addConnection(name, conn)
+    if _Connections[name] then
+        pcall(function() _Connections[name]:Disconnect() end)
+    end
+    _Connections[name] = conn
+end
+
+local function _removeConnection(name)
+    if _Connections[name] then
+        pcall(function() _Connections[name]:Disconnect() end)
+        _Connections[name] = nil
+    end
+end
+
+-- ============================================================
+-- SECTION 4A: FISHING FEATURES
+-- ============================================================
+
+-- Auto Fish
+_Features.autoFish = function(enabled)
+    _States.auto_fish = enabled
+    if enabled then
+        task.spawn(function()
+            _Util.notify("Auto Fish", "Auto Fish ENABLED", 2)
+            while _States.auto_fish do
+                pcall(function()
+                    -- Step 1: Cast rod
+                    local _cast_remote = _GameData.remotes.cast
+                    if _cast_remote then
+                        _Util.fireRemote(_cast_remote)
+                        _rnd_delay(0.5, 1.5) -- Wait for cast
+
+                        -- Step 2: Wait for bite (simulated)
+                        _rnd_delay(1.0, 3.0)
+
+                        -- Step 3: Reel/Catch
+                        local _catch_remote = _GameData.remotes.catch or _GameData.remotes.reel
+                        if _catch_remote then
+                            if _States.auto_perfect then
+                                -- Send perfect timing argument
+                                _Util.fireRemote(_catch_remote, "Perfect", 1, true)
+                            else
+                                _Util.fireRemote(_catch_remote, "Good", 0.8)
+                            end
+                            _rnd_delay(0.5, 1.0)
+                        end
+                    else
+                        -- Fallback: Try to interact with fishing spots
+                        local _char = _Util.getCharacter()
+                        local _hrp = _Util.getHRP()
+                        if _hrp then
+                            for _, _spot in ipairs(_GameData.locations.fishing_spots) do
+                                pcall(function()
+                                    local _spot_pos
+                                    if _spot:IsA("Model") then
+                                        _spot_pos = _spot:GetBoundingBox().Position
+                                    elseif _spot:IsA("BasePart") then
+                                        _spot_pos = _spot.Position
+                                    end
+                                    if _spot_pos then
+                                        local _dist = (_hrp.Position - _spot_pos).Magnitude
+                                        if _dist < 50 then
+                                            -- Try fireclickdetector or proximity prompt
+                                            local _cd = _spot:FindFirstChildOfClass("ClickDetector")
+                                            if _cd then
+                                                fireclickdetector(_cd)
+                                            end
+                                            local _pp = _spot:FindFirstChildOfClass("ProximityPrompt")
+                                            if _pp then
+                                                fireproximityprompt(_pp)
+                                            end
+                                        end
+                                    end
+                                end)
+                            end
+                        end
+                        _rnd_delay(1.0, 2.0)
+                    end
+
+                    -- Auto sell if needed
+                    if _States.auto_sell then
+                        -- Check inventory (attempt via remote)
+                        local _sell_remote = _GameData.remotes.sell
+                        if _sell_remote then
+                            _Util.fireRemote(_sell_remote, "All")
                         end
                     end
-                end
-            end)
-        elseif name == "infiniteJump" then
-            Toggles.infiniteJump = game:GetService("UserInputService").JumpRequest:Connect(function()
-                if Features.infiniteJump then
-                    local char = Utility.getChar()
-                    local humanoid = char and char:FindFirstChild("Humanoid")
-                    if humanoid then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    end
-                end
-            end)
-        elseif name == "fullbright" then
-            local lighting = game:GetService("Lighting")
-            if Features.fullbright then
-                lighting.Brightness = 2
-                lighting.ClockTime = 12
-                lighting.FogEnd = 100000
-            else
-                lighting.Brightness = 1
-                lighting.FogEnd = 1000
+                end)
+
+                _rnd_delay(0.3, 0.8)
             end
-        elseif name == "noFog" then
-            local lighting = game:GetService("Lighting")
-            if Features.noFog then
-                lighting.FogEnd = 100000
-            else
-                lighting.FogEnd = 1000
-            end
-        elseif name == "noWaterEffect" then
-            -- search for water parts and set transparency
-            for _, v in ipairs(workspace:GetDescendants()) do
-                if v:IsA("Part") and v.Name:lower():find("water") then
-                    v.Transparency = 1
-                end
-            end
-        elseif name == "antiAFK" then
-            Toggles.antiAFK = game:GetService("RunService").Heartbeat:Connect(function()
-                if Features.antiAFK then
-                    local hrp = Utility.getChar() and Utility.getChar():FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        hrp.Velocity = hrp.Velocity + Vector3.new(0, 0.01, 0)
-                    end
-                end
-            end)
-        elseif name == "godMode" then
-            Toggles.godMode = game:GetService("RunService").Heartbeat:Connect(function()
-                if Features.godMode then
-                    local char = Utility.getChar()
-                    local humanoid = char and char:FindFirstChild("Humanoid")
-                    if humanoid then
-                        humanoid.MaxHealth = 1e9
-                        humanoid.Health = 1e9
-                    end
-                end
-            end)
-        elseif name == "fpsBooster" then
-            if Features.fpsBooster then
-                -- remove unnecessary decorations
-                for _, v in ipairs(workspace:GetDescendants()) do
-                    if v:IsA("Decal") or v:IsA("ParticleEmitter") then
-                        v:Destroy()
-                    end
-                end
-            end
-        elseif name == "screenshotMode" then
-            if Features.screenshotMode then
-                -- hide UI
-                if UI then UI.Visible = false end
-            else
-                if UI then UI.Visible = true end
-            end
-        elseif name == "chatSpam" then
-            Toggles.chatSpam = task.spawn(function()
-                while Features.chatSpam do
-                    if Features.spamMessage ~= "" then
-                        local chat = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
-                        if chat then
-                            local sayMsg = chat:FindFirstChild("SayMessageRequest")
-                            if sayMsg then
-                                sayMsg:FireServer(Features.spamMessage, "All")
+        end)
+    else
+        _Util.notify("Auto Fish", "Auto Fish DISABLED", 2)
+    end
+end
+
+-- Auto Perfect Catch
+_Features.autoPerfect = function(enabled)
+    _States.auto_perfect = enabled
+    if enabled then
+        _Util.notify("Perfect Catch", "Auto Perfect Catch ENABLED", 2)
+
+        -- Hook the catch GUI/minigame
+        task.spawn(function()
+            while _States.auto_perfect do
+                pcall(function()
+                    local _playerGui = _LP:FindFirstChild("PlayerGui")
+                    if _playerGui then
+                        for _, _gui in ipairs(_playerGui:GetDescendants()) do
+                            -- Look for fishing minigame elements
+                            if _gui:IsA("Frame") or _gui:IsA("ImageLabel") then
+                                local _n = _gui.Name:lower()
+                                if string.find(_n, "fish") or string.find(_n, "catch") or
+                                   string.find(_n, "reel") or string.find(_n, "minigame") or
+                                   string.find(_n, "bar") then
+                                    -- Try to auto-click/interact at perfect timing
+                                    if _gui.Visible then
+                                        -- Find the button/target in the minigame
+                                        for _, _child in ipairs(_gui:GetDescendants()) do
+                                            if _child:IsA("TextButton") or _child:IsA("ImageButton") then
+                                                pcall(function()
+                                                    -- Fire the button at "perfect" timing
+                                                    _rnd_delay(0.05, 0.15)
+                                                    if firesignal then
+                                                        firesignal(_child.MouseButton1Click)
+                                                    elseif fireclickdetector then
+                                                        _child.MouseButton1Click:Fire()
+                                                    end
+                                                end)
+                                            end
+                                        end
+                                    end
+                                end
                             end
                         end
                     end
-                    task.wait(1)
+                end)
+                task.wait(0.05) -- Fast polling for minigame
+            end
+        end)
+    else
+        _Util.notify("Perfect Catch", "Auto Perfect Catch DISABLED", 2)
+    end
+end
+
+-- Auto Reel
+_Features.autoReel = function(enabled)
+    _States.auto_reel = enabled
+    if enabled then
+        _Util.notify("Auto Reel", "Auto Reel ENABLED", 2)
+        task.spawn(function()
+            while _States.auto_reel do
+                pcall(function()
+                    local _reel_remote = _GameData.remotes.reel
+                    if _reel_remote then
+                        -- Detect when to reel based on GUI indicators
+                        local _playerGui = _LP:FindFirstChild("PlayerGui")
+                        if _playerGui then
+                            for _, _gui in ipairs(_playerGui:GetDescendants()) do
+                                if _gui:IsA("Frame") and _gui.Visible then
+                                    local _n = _gui.Name:lower()
+                                    if string.find(_n, "reel") or string.find(_n, "indicator") or
+                                       string.find(_n, "alert") or string.find(_n, "bite") then
+                                        _rnd_delay(0.1, 0.3)
+                                        _Util.fireRemote(_reel_remote, true)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end)
+                _rnd_delay(0.1, 0.2)
+            end
+        end)
+    end
+end
+
+-- Instant Fish (via remote manipulation)
+_Features.instantFish = function(enabled)
+    _States.instant_fish = enabled
+    if enabled then
+        _Util.notify("Instant Fish", "Instant Fish ENABLED (risky!)", 2)
+        task.spawn(function()
+            while _States.instant_fish do
+                pcall(function()
+                    local _cast = _GameData.remotes.cast
+                    local _catch = _GameData.remotes.catch
+
+                    if _cast and _catch then
+                        _Util.fireRemote(_cast)
+                        _rnd_delay(0.05, 0.15)
+                        _Util.fireRemote(_catch, "Perfect", 1, true)
+                        _rnd_delay(0.2, 0.5)
+                    end
+                end)
+                _rnd_delay(0.3, 0.7)
+            end
+        end)
+    end
+end
+
+-- Auto Sell Fish
+_Features.autoSell = function(enabled)
+    _States.auto_sell = enabled
+    if enabled then
+        _Util.notify("Auto Sell", "Auto Sell ENABLED", 2)
+        task.spawn(function()
+            while _States.auto_sell do
+                pcall(function()
+                    local _sell_remote = _GameData.remotes.sell
+                    if _sell_remote then
+                        _Util.fireRemote(_sell_remote, "All")
+                    else
+                        -- Try to find and interact with sell NPC/area
+                        local _sell_area = _GameData.locations.sell_area
+                        if _sell_area then
+                            local _sell_pos
+                            if _sell_area:IsA("Model") then
+                                _sell_pos = _sell_area:GetBoundingBox()
+                            elseif _sell_area:IsA("BasePart") then
+                                _sell_pos = _sell_area.CFrame
+                            end
+                            if _sell_pos then
+                                local _hrp = _Util.getHRP()
+                                if _hrp then
+                                    local _dist = (_hrp.Position - _sell_pos.Position).Magnitude
+                                    if _dist > 20 then
+                                        -- Teleport to sell area
+                                        _Util.teleportTo(_sell_pos + Vector3.new(0, 3, 0))
+                                        _rnd_delay(0.5, 1.0)
+                                    end
+                                    -- Try proximity prompt
+                                    for _, _d in ipairs(_sell_area:GetDescendants()) do
+                                        if _d:IsA("ProximityPrompt") then
+                                            pcall(function() fireproximityprompt(_d) end)
+                                        elseif _d:IsA("ClickDetector") then
+                                            pcall(function() fireclickdetector(_d) end)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end)
+                _rnd_delay(10, 20) -- Check every 10-20 seconds
+            end
+        end)
+    end
+end
+
+-- Fish ESP
+local _esp_objects = {
+    fish = {},
+    player = {},
+    item = {},
+    npc = {},
+    treasure = {},
+}
+
+local function _createESP(obj, color, text, category)
+    pcall(function()
+        -- BillboardGui ESP
+        local _bb = Instance.new("BillboardGui")
+        _bb.Name = "_kj_esp_" .. category
+        _bb.AlwaysOnTop = true
+        _bb.Size = UDim2.new(0, 200, 0, 50)
+        _bb.StudsOffset = Vector3.new(0, 3, 0)
+
+        local _tl = Instance.new("TextLabel")
+        _tl.BackgroundTransparency = 0.5
+        _tl.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        _tl.Size = UDim2.new(1, 0, 1, 0)
+        _tl.Text = text
+        _tl.TextColor3 = color
+        _tl.TextScaled = true
+        _tl.Font = Enum.Font.GothamBold
+        _tl.Parent = _bb
+
+        local _target = obj
+        if obj:IsA("Model") then
+            _target = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart") or obj.PrimaryPart
+        end
+
+        if _target then
+            _bb.Adornee = _target
+            _bb.Parent = _target
+
+            -- Highlight
+            local _hl = Instance.new("Highlight")
+            _hl.Name = "_kj_hl_" .. category
+            _hl.FillColor = color
+            _hl.FillTransparency = 0.7
+            _hl.OutlineColor = color
+            _hl.OutlineTransparency = 0.3
+            _hl.Parent = obj
+
+            table.insert(_esp_objects[category], {bb = _bb, hl = _hl, obj = obj})
+        end
+    end)
+end
+
+local function _clearESP(category)
+    if _esp_objects[category] then
+        for _, _data in ipairs(_esp_objects[category]) do
+            pcall(function() _data.bb:Destroy() end)
+            pcall(function() _data.hl:Destroy() end)
+        end
+        _esp_objects[category] = {}
+    end
+end
+
+_Features.fishESP = function(enabled)
+    _States.fish_esp = enabled
+    if enabled then
+        _Util.notify("Fish ESP", "Fish ESP ENABLED", 2)
+        task.spawn(function()
+            while _States.fish_esp do
+                _clearESP("fish")
+                pcall(function()
+                    -- Find fish in workspace
+                    local _fish_containers = {
+                        _WS:FindFirstChild("Fish"),
+                        _WS:FindFirstChild("Fishes"),
+                        _WS:FindFirstChild("FishModels"),
+                        _WS:FindFirstChild("Ocean"),
+                        _WS:FindFirstChild("Water"),
+                        _WS:FindFirstChild("Sea"),
+                    }
+
+                    local function _scan_for_fish(container)
+                        if not container then return end
+                        for _, _obj in ipairs(container:GetDescendants()) do
+                            local _n = _obj.Name:lower()
+                            if (string.find(_n, "fish") or string.find(_n, "catch")) and
+                               (_obj:IsA("Model") or _obj:IsA("MeshPart") or _obj:IsA("Part")) then
+                                -- Determine rarity by name/color
+                                local _rarity = "Common"
+                                local _color = Color3.fromRGB(255, 255, 255)
+                                local _name_upper = _obj.Name
+
+                                if string.find(_n, "legend") or string.find(_n, "mythic") then
+                                    _rarity = "Legendary"
+                                    _color = Color3.fromRGB(255, 215, 0) -- Gold
+                                    if _States.rare_notify then
+                                        _Util.notify("🐟 RARE FISH!", _name_upper .. " (" .. _rarity .. ")", 5)
+                                    end
+                                elseif string.find(_n, "epic") then
+                                    _rarity = "Epic"
+                                    _color = Color3.fromRGB(163, 53, 238) -- Purple
+                                    if _States.rare_notify then
+                                        _Util.notify("🐟 Rare Fish!", _name_upper .. " (" .. _rarity .. ")", 4)
+                                    end
+                                elseif string.find(_n, "rare") then
+                                    _rarity = "Rare"
+                                    _color = Color3.fromRGB(0, 112, 255) -- Blue
+                                    if _States.rare_notify then
+                                        _Util.notify("🐟 Rare Fish!", _name_upper .. " (" .. _rarity .. ")", 3)
+                                    end
+                                elseif string.find(_n, "uncommon") then
+                                    _rarity = "Uncommon"
+                                    _color = Color3.fromRGB(0, 255, 0) -- Green
+                                end
+
+                                _createESP(_obj, _color, _name_upper .. "\n[" .. _rarity .. "]", "fish")
+                            end
+                        end
+                    end
+
+                    for _, _container in ipairs(_fish_containers) do
+                        _scan_for_fish(_container)
+                    end
+
+                    -- Also scan general workspace
+                    _scan_for_fish(_WS)
+                end)
+
+                task.wait(2) -- Refresh every 2 seconds
+            end
+            _clearESP("fish")
+        end)
+    else
+        _clearESP("fish")
+        _Util.notify("Fish ESP", "Fish ESP DISABLED", 2)
+    end
+end
+
+-- Rare Fish Notification
+_Features.rareNotify = function(enabled)
+    _States.rare_notify = enabled
+    _Util.notify("Rare Notify", enabled and "ENABLED" or "DISABLED", 2)
+end
+
+-- Auto Equip Best Rod
+_Features.autoEquipRod = function(enabled)
+    _States.auto_equip_rod = enabled
+    if enabled then
+        task.spawn(function()
+            _Util.notify("Auto Equip", "Auto Equip Best Rod ENABLED", 2)
+            while _States.auto_equip_rod do
+                pcall(function()
+                    local _equip_remote = _GameData.remotes.equip
+                    if _equip_remote then
+                        -- Try to equip best rod
+                        _Util.fireRemote(_equip_remote, "Best")
+                    end
+
+                    -- Also try via backpack
+                    local _bp = _LP:FindFirstChild("Backpack")
+                    if _bp then
+                        local _best_rod = nil
+                        local _best_value = 0
+                        for _, _tool in ipairs(_bp:GetChildren()) do
+                            if _tool:IsA("Tool") then
+                                local _n = _tool.Name:lower()
+                                if string.find(_n, "rod") or string.find(_n, "pole") or
+                                   string.find(_n, "fishing") then
+                                    -- Estimate value from name
+                                    local _val = 1
+                                    if string.find(_n, "gold") or string.find(_n, "legend") then _val = 100
+                                    elseif string.find(_n, "diamond") then _val = 80
+                                    elseif string.find(_n, "platinum") then _val = 60
+                                    elseif string.find(_n, "titanium") then _val = 50
+                                    elseif string.find(_n, "steel") then _val = 30
+                                    elseif string.find(_n, "iron") then _val = 20
+                                    elseif string.find(_n, "wood") or string.find(_n, "basic") then _val = 5
+                                    end
+
+                                    if _val > _best_value then
+                                        _best_value = _val
+                                        _best_rod = _tool
+                                    end
+                                end
+                            end
+                        end
+
+                        if _best_rod then
+                            local _hum = _Util.getHumanoid()
+                            if _hum then
+                                _hum:EquipTool(_best_rod)
+                            end
+                        end
+                    end
+                end)
+
+                _rnd_delay(5, 10) -- Check periodically
+            end
+        end)
+    end
+end
+
+-- ============================================================
+-- SECTION 4B: MOVEMENT & TELEPORT FEATURES
+-- ============================================================
+
+-- Speed Hack (with spoofing)
+_Features.speedHack = function(enabled, value)
+    _States.speed_hack = enabled
+    _States.speed_value = value or _States.speed_value
+
+    if enabled then
+        -- Clamp to safe range
+        local _safe_speed = math.clamp(_States.speed_value, 16, 50)
+        _AC_Module._real_speed = _safe_speed
+        _AC_Module._spoofed_speed = 16 -- Spoof as normal to server
+
+        task.spawn(function()
+            while _States.speed_hack do
+                pcall(function()
+                    local _hum = _Util.getHumanoid()
+                    if _hum then
+                        _hum.WalkSpeed = _AC_Module._real_speed
+                    end
+                end)
+                task.wait(0.1)
+            end
+            -- Reset
+            pcall(function()
+                local _hum = _Util.getHumanoid()
+                if _hum then _hum.WalkSpeed = 16 end
+            end)
+            _AC_Module._real_speed = 16
+        end)
+
+        _Util.notify("Speed Hack", "Speed: " .. _safe_speed, 2)
+    else
+        pcall(function()
+            local _hum = _Util.getHumanoid()
+            if _hum then _hum.WalkSpeed = 16 end
+        end)
+        _AC_Module._real_speed = 16
+        _Util.notify("Speed Hack", "DISABLED", 2)
+    end
+end
+
+-- Fly Hack
+local _flyBody = nil
+local _flyGyro = nil
+
+_Features.flyHack = function(enabled)
+    _States.fly_hack = enabled
+
+    if enabled then
+        _Util.notify("Fly", "Fly ENABLED (Press E to go up, Q to go down)", 3)
+
+        task.spawn(function()
+            local _hrp = _Util.getHRP()
+            if not _hrp then return end
+
+            -- Create flight mechanics
+            _flyBody = Instance.new("BodyVelocity")
+            _flyBody.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            _flyBody.Velocity = Vector3.new(0, 0, 0)
+            _flyBody.Parent = _hrp
+
+            _flyGyro = Instance.new("BodyGyro")
+            _flyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            _flyGyro.P = 9e4
+            _flyGyro.Parent = _hrp
+
+            local _fly_speed = _States.speed_value or 50
+            local _camera = _WS.CurrentCamera
+
+            local _conn
+            _conn = _RunS.RenderStepped:Connect(function()
+                if not _States.fly_hack then
+                    pcall(function()
+                        if _flyBody then _flyBody:Destroy(); _flyBody = nil end
+                        if _flyGyro then _flyGyro:Destroy(); _flyGyro = nil end
+                    end)
+                    _conn:Disconnect()
+                    return
+                end
+
+                pcall(function()
+                    if _flyBody and _flyGyro and _hrp then
+                        _flyGyro.CFrame = _camera.CFrame
+
+                        local _vel = Vector3.new(0, 0, 0)
+                        local _cf = _camera.CFrame
+
+                        if _UIS:IsKeyDown(Enum.KeyCode.W) then
+                            _vel = _vel + _cf.LookVector * _fly_speed
+                        end
+                        if _UIS:IsKeyDown(Enum.KeyCode.S) then
+                            _vel = _vel - _cf.LookVector * _fly_speed
+                        end
+                        if _UIS:IsKeyDown(Enum.KeyCode.A) then
+                            _vel = _vel - _cf.RightVector * _fly_speed
+                        end
+                        if _UIS:IsKeyDown(Enum.KeyCode.D) then
+                            _vel = _vel + _cf.RightVector * _fly_speed
+                        end
+                        if _UIS:IsKeyDown(Enum.KeyCode.E) then
+                            _vel = _vel + Vector3.new(0, _fly_speed, 0)
+                        end
+                        if _UIS:IsKeyDown(Enum.KeyCode.Q) then
+                            _vel = _vel - Vector3.new(0, _fly_speed, 0)
+                        end
+
+                        _flyBody.Velocity = _vel
+                    end
+                end)
+            end)
+
+            _addConnection("fly", _conn)
+        end)
+    else
+        pcall(function()
+            if _flyBody then _flyBody:Destroy(); _flyBody = nil end
+            if _flyGyro then _flyGyro:Destroy(); _flyGyro = nil end
+        end)
+        _removeConnection("fly")
+        _Util.notify("Fly", "Fly DISABLED", 2)
+    end
+end
+
+-- Noclip
+_Features.noclip = function(enabled)
+    _States.noclip = enabled
+
+    if enabled then
+        _Util.notify("Noclip", "Noclip ENABLED", 2)
+        local _conn = _RunS.Stepped:Connect(function()
+            if not _States.noclip then return end
+            pcall(function()
+                local _char = _Util.getCharacter()
+                if _char then
+                    for _, _part in ipairs(_char:GetDescendants()) do
+                        if _part:IsA("BasePart") then
+                            _part.CanCollide = false
+                        end
+                    end
                 end
             end)
+        end)
+        _addConnection("noclip", _conn)
+    else
+        _removeConnection("noclip")
+        pcall(function()
+            local _char = _Util.getCharacter()
+            if _char then
+                for _, _part in ipairs(_char:GetDescendants()) do
+                    if _part:IsA("BasePart") then
+                        _part.CanCollide = true
+                    end
+                end
+            end
+        end)
+        _Util.notify("Noclip", "Noclip DISABLED", 2)
+    end
+end
+
+-- Infinite Jump
+_Features.infiniteJump = function(enabled)
+    _States.infinite_jump = enabled
+
+    if enabled then
+        _Util.notify("Inf Jump", "Infinite Jump ENABLED", 2)
+        local _conn = _UIS.JumpRequest:Connect(function()
+            if not _States.infinite_jump then return end
+            pcall(function()
+                local _hum = _Util.getHumanoid()
+                if _hum then
+                    _hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end)
+        end)
+        _addConnection("inf_jump", _conn)
+    else
+        _removeConnection("inf_jump")
+        _Util.notify("Inf Jump", "Infinite Jump DISABLED", 2)
+    end
+end
+
+-- Teleport Functions
+local _TeleportLocations = {
+    ["Fishing Spot 1"] = nil,
+    ["Fishing Spot 2"] = nil,
+    ["Fishing Spot 3"] = nil,
+    ["Shop"] = nil,
+    ["Sell Area"] = nil,
+    ["Event Area"] = nil,
+    ["Spawn"] = nil,
+}
+
+local function _updateTeleportLocations()
+    -- Populate from game data
+    for _i, _spot in ipairs(_GameData.locations.fishing_spots) do
+        local _name = "Fishing Spot " .. _i
+        pcall(function()
+            if _spot:IsA("Model") then
+                _TeleportLocations[_name] = _spot:GetBoundingBox()
+            elseif _spot:IsA("BasePart") then
+                _TeleportLocations[_name] = _spot.CFrame
+            end
+        end)
+    end
+
+    if _GameData.locations.shop then
+        pcall(function()
+            local _s = _GameData.locations.shop
+            if _s:IsA("Model") then
+                _TeleportLocations["Shop"] = _s:GetBoundingBox() + Vector3.new(0, 3, 0)
+            elseif _s:IsA("BasePart") then
+                _TeleportLocations["Shop"] = _s.CFrame + Vector3.new(0, 3, 0)
+            end
+        end)
+    end
+
+    if _GameData.locations.sell_area then
+        pcall(function()
+            local _s = _GameData.locations.sell_area
+            if _s:IsA("Model") then
+                _TeleportLocations["Sell Area"] = _s:GetBoundingBox() + Vector3.new(0, 3, 0)
+            elseif _s:IsA("BasePart") then
+                _TeleportLocations["Sell Area"] = _s.CFrame + Vector3.new(0, 3, 0)
+            end
+        end)
+    end
+
+    if _GameData.locations.event_area then
+        pcall(function()
+            local _s = _GameData.locations.event_area
+            if _s:IsA("Model") then
+                _TeleportLocations["Event Area"] = _s:GetBoundingBox() + Vector3.new(0, 3, 0)
+            elseif _s:IsA("BasePart") then
+                _TeleportLocations["Event Area"] = _s.CFrame + Vector3.new(0, 3, 0)
+            end
+        end)
+    end
+
+    for _i, _spot in ipairs(_GameData.locations.secret_spots) do
+        local _name = "Secret Spot " .. _i
+        pcall(function()
+            if _spot:IsA("Model") then
+                _TeleportLocations[_name] = _spot:GetBoundingBox()
+            elseif _spot:IsA("BasePart") then
+                _TeleportLocations[_name] = _spot.CFrame
+            end
+        end)
+    end
+
+    if _GameData.locations.spawn then
+        pcall(function()
+            local _s = _GameData.locations.spawn
+            if _s:IsA("BasePart") then
+                _TeleportLocations["Spawn"] = _s.CFrame + Vector3.new(0, 3, 0)
+            end
+        end)
+    end
+end
+
+_Features.teleportTo = function(location_name)
+    _updateTeleportLocations()
+    local _cf = _TeleportLocations[location_name]
+    if _cf then
+        if typeof(_cf) == "CFrame" then
+            _Util.teleportTo(_cf)
+            _Util.notify("Teleport", "Teleported to " .. location_name, 2)
         end
     else
-        -- stop feature
-        if Toggles[name] then
-            if type(Toggles[name]) == "thread" then
-                coroutine.close(Toggles[name])
-            elseif Toggles[name].Disconnect then
-                Toggles[name]:Disconnect()
-            end
-            Toggles[name] = nil
-        end
-        -- additional cleanup for some features
-        if name == "speedHack" then
-            local char = Utility.getChar()
-            local humanoid = char and char:FindFirstChild("Humanoid")
-            if humanoid then humanoid.WalkSpeed = 16 end
-        elseif name == "flyHack" then
-            local char = Utility.getChar()
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local bv = hrp:FindFirstChildOfClass("BodyVelocity")
-                if bv then bv:Destroy() end
-            end
-        elseif name == "noclip" then
-            local char = Utility.getChar()
-            for _, part in ipairs(char:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
+        _Util.notify("Teleport", "Location not found: " .. location_name, 3)
+    end
+end
+
+-- Auto Farm Route
+_Features.autoFarmRoute = function(enabled)
+    _States.auto_farm_route = enabled
+
+    if enabled then
+        _Util.notify("Auto Farm", "Auto Farm Route ENABLED", 2)
+        task.spawn(function()
+            _updateTeleportLocations()
+            local _route = {}
+
+            -- Build route from available fishing spots
+            for _name, _cf in pairs(_TeleportLocations) do
+                if string.find(_name, "Fishing") or string.find(_name, "Secret") then
+                    table.insert(_route, {name = _name, cf = _cf})
                 end
             end
-        end
-    end
-end
 
--- ===============================
--- CUSTOM UI (no external library)
--- ===============================
-local UI = Instance.new("ScreenGui")
-UI.Name = "KimJongUI"
-UI.Parent = game:GetService("CoreGui")
+            if #_route == 0 then
+                _Util.notify("Auto Farm", "No fishing spots found!", 3)
+                _States.auto_farm_route = false
+                return
+            end
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 500, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-MainFrame.BackgroundTransparency = 0.1
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = UI
+            local _idx = 1
+            while _States.auto_farm_route do
+                pcall(function()
+                    local _spot = _route[_idx]
+                    if _spot and typeof(_spot.cf) == "CFrame" then
+                        _Util.notify("Auto Farm", "Going to " .. _spot.name, 2)
+                        _Util.teleportTo(_spot.cf)
+                        _rnd_delay(1, 2)
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Position = UDim2.new(0, 0, 0, 0)
-Title.BackgroundColor3 = Color3.fromRGB(20,20,20)
-Title.Text = "Script KimJong v"..ScriptVersion.." - Fish It"
-Title.TextColor3 = Color3.fromRGB(255,255,255)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 18
-Title.Parent = MainFrame
+                        -- Fish at this spot for a while
+                        local _fish_time = math.random(30, 60)
+                        local _start = tick()
 
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -30, 0, 0)
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(255,255,255)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(200,0,0)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 18
-CloseBtn.Parent = Title
-CloseBtn.MouseButton1Click:Connect(function()
-    UI.Enabled = false
-end)
+                        while _States.auto_farm_route and (tick() - _start) < _fish_time do
+                            -- Auto fish at current spot
+                            if _GameData.remotes.cast then
+                                _Util.fireRemote(_GameData.remotes.cast)
+                                _rnd_delay(1, 3)
+                                if _GameData.remotes.catch then
+                                    _Util.fireRemote(_GameData.remotes.catch, "Perfect", 1, true)
+                                end
+                            end
+                            _rnd_delay(1, 3)
+                        end
+                    end
 
-local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(1, 0, 0, 40)
-TabContainer.Position = UDim2.new(0, 0, 0, 30)
-TabContainer.BackgroundTransparency = 1
-TabContainer.Parent = MainFrame
-
-local ContentFrame = Instance.new("Frame")
-ContentFrame.Size = UDim2.new(1, 0, 1, -70)
-ContentFrame.Position = UDim2.new(0, 0, 0, 70)
-ContentFrame.BackgroundColor3 = Color3.fromRGB(40,40,40)
-ContentFrame.BackgroundTransparency = 0.2
-ContentFrame.BorderSizePixel = 0
-ContentFrame.Parent = MainFrame
-
-local tabs = {
-    "Fishing", "Teleport", "ESP/Visual", "Player", "Farm", "Misc/Utility", "Settings"
-}
-local currentTab = nil
-local tabButtons = {}
-
--- Function to create a tab button
-local function createTabButton(name, xPos)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 100, 1, 0)
-    btn.Position = UDim2.new(0, xPos, 0, 0)
-    btn.Text = name
-    btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 14
-    btn.BorderSizePixel = 0
-    btn.Parent = TabContainer
-    btn.MouseButton1Click:Connect(function()
-        -- clear content frame
-        for _, child in ipairs(ContentFrame:GetChildren()) do
-            child:Destroy()
-        end
-        currentTab = name
-        -- load tab content
-        if name == "Fishing" then
-            loadFishingTab()
-        elseif name == "Teleport" then
-            loadTeleportTab()
-        elseif name == "ESP/Visual" then
-            loadVisualTab()
-        elseif name == "Player" then
-            loadPlayerTab()
-        elseif name == "Farm" then
-            loadFarmTab()
-        elseif name == "Misc/Utility" then
-            loadMiscTab()
-        elseif name == "Settings" then
-            loadSettingsTab()
-        end
-    end)
-    return btn
-end
-
--- Create tab buttons
-local x = 0
-for _, name in ipairs(tabs) do
-    table.insert(tabButtons, createTabButton(name, x))
-    x = x + 100
-end
-
--- Define tab content functions
-function loadFishingTab()
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.BackgroundTransparency = 1
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.Parent = ContentFrame
-    
-    local y = 5
-    local function addToggle(label, flag, default)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 200, 0, 30)
-        btn.Position = UDim2.new(0, 10, 0, y)
-        btn.Text = label .. ": OFF"
-        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-        btn.TextColor3 = Color3.fromRGB(255,255,255)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 14
-        btn.Parent = scroll
-        local state = default
-        btn.MouseButton1Click:Connect(function()
-            state = not state
-            btn.Text = label .. (state and ": ON" or ": OFF")
-            setFeature(flag, state)
+                    _idx = _idx + 1
+                    if _idx > #_route then
+                        _idx = 1
+                        -- Sell fish between cycles
+                        if _GameData.remotes.sell then
+                            _Util.fireRemote(_GameData.remotes.sell, "All")
+                        end
+                    end
+                end)
+            end
         end)
-        y = y + 35
-        if default then
-            btn.Text = label .. ": ON"
-            setFeature(flag, true)
-        end
+    else
+        _Util.notify("Auto Farm", "Auto Farm Route DISABLED", 2)
     end
-    
-    addToggle("Auto Fish", "autoFish", false)
-    addToggle("Auto Perfect Catch", "autoPerfect", false)
-    addToggle("Auto Reel", "autoReel", false)
-    addToggle("Instant Fish", "instantFish", false)
-    addToggle("Auto Sell Fish", "autoSell", false)
-    addToggle("Fish ESP", "fishESP", false)
-    addToggle("Rare Fish Notification", "rareNotif", false)
-    addToggle("Auto Equip Best Rod", "autoEquipBestRod", false)
-    -- Dropdown for fish target (simplified)
-    local targetDropdown = Instance.new("TextButton")
-    targetDropdown.Size = UDim2.new(0, 200, 0, 30)
-    targetDropdown.Position = UDim2.new(0, 10, 0, y)
-    targetDropdown.Text = "Target: Any"
-    targetDropdown.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    targetDropdown.TextColor3 = Color3.fromRGB(255,255,255)
-    targetDropdown.Font = Enum.Font.Gotham
-    targetDropdown.TextSize = 14
-    targetDropdown.Parent = scroll
-    local options = {"Any", "Common", "Rare", "Legendary"}
-    local optIndex = 1
-    targetDropdown.MouseButton1Click:Connect(function()
-        optIndex = optIndex % #options + 1
-        targetDropdown.Text = "Target: " .. options[optIndex]
-        Features.customTarget = options[optIndex]
-    end)
-    y = y + 35
-    scroll.CanvasSize = UDim2.new(0, 0, 0, y)
 end
 
-function loadTeleportTab()
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.BackgroundTransparency = 1
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.Parent = ContentFrame
-    
-    local y = 5
-    local locations = {
-        "Fishing Spot 1", "Fishing Spot 2", "Shop", "Sell Area", "Event Area", "Secret Spot"
-    }
-    for _, loc in ipairs(locations) do
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 200, 0, 30)
-        btn.Position = UDim2.new(0, 10, 0, y)
-        btn.Text = "Teleport to " .. loc
-        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-        btn.TextColor3 = Color3.fromRGB(255,255,255)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 14
-        btn.Parent = scroll
-        btn.MouseButton1Click:Connect(function()
-            -- find actual CFrame
-            local spots = Utility.getFishingSpots()
-            if loc == "Fishing Spot 1" and spots[1] then
-                Utility.teleport(spots[1].CFrame + Vector3.new(0,3,0))
-            elseif loc == "Fishing Spot 2" and spots[2] then
-                Utility.teleport(spots[2].CFrame + Vector3.new(0,3,0))
-            elseif loc == "Shop" then
-                -- find shop part
-                for _, v in ipairs(workspace:GetDescendants()) do
-                    if v:IsA("Part") and v.Name:lower():find("shop") then
-                        Utility.teleport(v.CFrame + Vector3.new(0,3,0))
-                        break
+-- ============================================================
+-- SECTION 4C: VISUAL/ESP FEATURES
+-- ============================================================
+
+-- Player ESP
+_Features.playerESP = function(enabled)
+    _States.player_esp = enabled
+
+    if enabled then
+        _Util.notify("Player ESP", "ENABLED", 2)
+        task.spawn(function()
+            while _States.player_esp do
+                _clearESP("player")
+                pcall(function()
+                    for _, _player in ipairs(_Players:GetPlayers()) do
+                        if _player ~= _LP and _player.Character then
+                            _createESP(
+                                _player.Character,
+                                Color3.fromRGB(255, 0, 0),
+                                _player.Name .. "\n[" .. math.floor(
+                                    ((_Util.getHRP() and _player.Character:FindFirstChild(_STR._hrp))
+                                    and (_Util.getHRP().Position - _player.Character[_STR._hrp].Position).Magnitude
+                                    or 0)
+                                ) .. "m]",
+                                "player"
+                            )
+                        end
+                    end
+                end)
+                task.wait(2)
+            end
+            _clearESP("player")
+        end)
+    else
+        _clearESP("player")
+        _Util.notify("Player ESP", "DISABLED", 2)
+    end
+end
+
+-- Item ESP
+_Features.itemESP = function(enabled)
+    _States.item_esp = enabled
+
+    if enabled then
+        _Util.notify("Item ESP", "ENABLED", 2)
+        task.spawn(function()
+            while _States.item_esp do
+                _clearESP("item")
+                pcall(function()
+                    -- Search for droppable items
+                    local _item_folders = {
+                        _WS:FindFirstChild("Items"),
+                        _WS:FindFirstChild("Drops"),
+                        _WS:FindFirstChild("Collectibles"),
+                        _WS:FindFirstChild("Loot"),
+                    }
+                    for _, _folder in ipairs(_item_folders) do
+                        if _folder then
+                            for _, _item in ipairs(_folder:GetChildren()) do
+                                if _item:IsA("Model") or _item:IsA("BasePart") or _item:IsA("Tool") then
+                                    _createESP(_item, Color3.fromRGB(0, 255, 255), _item.Name, "item")
+                                end
+                            end
+                        end
+                    end
+
+                    -- Also scan for tools on ground
+                    for _, _obj in ipairs(_WS:GetChildren()) do
+                        if _obj:IsA("Tool") then
+                            _createESP(_obj, Color3.fromRGB(0, 255, 255), _obj.Name .. " [Item]", "item")
+                        end
+                    end
+                end)
+                task.wait(3)
+            end
+            _clearESP("item")
+        end)
+    else
+        _clearESP("item")
+        _Util.notify("Item ESP", "DISABLED", 2)
+    end
+end
+
+-- NPC ESP
+_Features.npcESP = function(enabled)
+    _States.npc_esp = enabled
+
+    if enabled then
+        _Util.notify("NPC ESP", "ENABLED", 2)
+        task.spawn(function()
+            while _States.npc_esp do
+                _clearESP("npc")
+                pcall(function()
+                    for _, _npc in ipairs(_GameData.npcs) do
+                        if _npc and _npc.Parent then
+                            _createESP(_npc, Color3.fromRGB(255, 165, 0), _npc.Name .. " [NPC]", "npc")
+                        end
+                    end
+                end)
+                task.wait(5)
+            end
+            _clearESP("npc")
+        end)
+    else
+        _clearESP("npc")
+        _Util.notify("NPC ESP", "DISABLED", 2)
+    end
+end
+
+-- Treasure ESP
+_Features.treasureESP = function(enabled)
+    _States.treasure_esp = enabled
+
+    if enabled then
+        _Util.notify("Treasure ESP", "ENABLED", 2)
+        task.spawn(function()
+            while _States.treasure_esp do
+                _clearESP("treasure")
+                pcall(function()
+                    for _, _t in ipairs(_GameData.treasures) do
+                        if _t and _t.Parent then
+                            _createESP(_t, Color3.fromRGB(255, 215, 0), _t.Name .. " [Treasure]", "treasure")
+                        end
+                    end
+
+                    -- Re-scan for new treasures
+                    for _, _obj in ipairs(_WS:GetDescendants()) do
+                        local _n = _obj.Name:lower()
+                        if (string.find(_n, "chest") or string.find(_n, "treasure") or
+                            string.find(_n, "crate")) and
+                           (_obj:IsA("Model") or _obj:IsA("BasePart")) then
+                            local _exists = false
+                            for _, _data in ipairs(_esp_objects.treasure) do
+                                if _data.obj == _obj then _exists = true; break end
+                            end
+                            if not _exists then
+                                _createESP(_obj, Color3.fromRGB(255, 215, 0), _obj.Name .. " [Treasure]", "treasure")
+                            end
+                        end
+                    end
+                end)
+                task.wait(3)
+            end
+            _clearESP("treasure")
+        end)
+    else
+        _clearESP("treasure")
+        _Util.notify("Treasure ESP", "DISABLED", 2)
+    end
+end
+
+-- Fullbright
+_Features.fullbright = function(enabled)
+    _States.fullbright = enabled
+
+    if enabled then
+        pcall(function()
+            _Lighting.Brightness = 2
+            _Lighting.ClockTime = 14
+            _Lighting.FogEnd = 100000
+            _Lighting.GlobalShadows = false
+            _Lighting.Ambient = Color3.fromRGB(178, 178, 178)
+            _Lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
+
+            -- Remove atmosphere/effects
+            for _, _e in ipairs(_Lighting:GetChildren()) do
+                if _e:IsA("Atmosphere") or _e:IsA("BloomEffect") or
+                   _e:IsA("BlurEffect") or _e:IsA("ColorCorrectionEffect") or
+                   _e:IsA("DepthOfFieldEffect") then
+                    _e.Enabled = false
+                end
+            end
+        end)
+        _Util.notify("Fullbright", "ENABLED", 2)
+    else
+        pcall(function()
+            _Lighting.Brightness = 1
+            _Lighting.GlobalShadows = true
+            _Lighting.Ambient = Color3.fromRGB(0, 0, 0)
+            for _, _e in ipairs(_Lighting:GetChildren()) do
+                if _e:IsA("Atmosphere") or _e:IsA("BloomEffect") or
+                   _e:IsA("BlurEffect") or _e:IsA("ColorCorrectionEffect") or
+                   _e:IsA("DepthOfFieldEffect") then
+                    _e.Enabled = true
+                end
+            end
+        end)
+        _Util.notify("Fullbright", "DISABLED", 2)
+    end
+end
+
+-- No Fog
+_Features.noFog = function(enabled)
+    _States.no_fog = enabled
+    if enabled then
+        pcall(function()
+            _Lighting.FogStart = 0
+            _Lighting.FogEnd = 9e9
+            for _, _e in ipairs(_Lighting:GetChildren()) do
+                if _e:IsA("Atmosphere") then
+                    _e.Density = 0
+                end
+            end
+        end)
+        _Util.notify("No Fog", "ENABLED", 2)
+    else
+        pcall(function()
+            _Lighting.FogStart = 0
+            _Lighting.FogEnd = 1000
+        end)
+        _Util.notify("No Fog", "DISABLED", 2)
+    end
+end
+
+-- No Water Effect
+_Features.noWater = function(enabled)
+    _States.no_water = enabled
+    if enabled then
+        pcall(function()
+            -- Make water transparent
+            if _WS.Terrain then
+                _WS.Terrain.WaterTransparency = 1
+                _WS.Terrain.WaterReflectance = 0
+                _WS.Terrain.WaterWaveSize = 0
+                _WS.Terrain.WaterWaveSpeed = 0
+            end
+
+            -- Also find water parts
+            for _, _obj in ipairs(_WS:GetDescendants()) do
+                if _obj:IsA("BasePart") then
+                    local _n = _obj.Name:lower()
+                    if string.find(_n, "water") then
+                        _obj.Transparency = 0.8
                     end
                 end
-            elseif loc == "Sell Area" then
-                for _, v in ipairs(workspace:GetDescendants()) do
-                    if v:IsA("Part") and v.Name:lower():find("sell") then
-                        Utility.teleport(v.CFrame + Vector3.new(0,3,0))
-                        break
+            end
+        end)
+        _Util.notify("No Water", "ENABLED - You can see underwater!", 2)
+    else
+        pcall(function()
+            if _WS.Terrain then
+                _WS.Terrain.WaterTransparency = 0.3
+                _WS.Terrain.WaterReflectance = 1
+            end
+        end)
+        _Util.notify("No Water", "DISABLED", 2)
+    end
+end
+
+-- FOV Changer
+_Features.setFOV = function(value)
+    _States.fov_value = value
+    pcall(function()
+        _WS.CurrentCamera.FieldOfView = value
+    end)
+end
+
+-- ============================================================
+-- SECTION 4D: PLAYER MODIFICATIONS
+-- ============================================================
+
+-- Infinite Stamina
+_Features.infStamina = function(enabled)
+    _States.inf_stamina = enabled
+    if enabled then
+        _Util.notify("Inf Stamina", "ENABLED", 2)
+        task.spawn(function()
+            while _States.inf_stamina do
+                pcall(function()
+                    -- Try to find stamina values in PlayerGui
+                    local _pg = _LP:FindFirstChild("PlayerGui")
+                    if _pg then
+                        for _, _g in ipairs(_pg:GetDescendants()) do
+                            local _n = _g.Name:lower()
+                            if (string.find(_n, "stamina") or string.find(_n, "energy")) then
+                                if _g:IsA("NumberValue") or _g:IsA("IntValue") then
+                                    _g.Value = _g.Value + 100
+                                end
+                            end
+                        end
+                    end
+
+                    -- Also try leaderstats
+                    local _ls = _LP:FindFirstChild("leaderstats") or _LP:FindFirstChild("Stats")
+                    if _ls then
+                        for _, _s in ipairs(_ls:GetChildren()) do
+                            local _n = _s.Name:lower()
+                            if string.find(_n, "stamina") or string.find(_n, "energy") then
+                                if _s:IsA("NumberValue") or _s:IsA("IntValue") then
+                                    _s.Value = math.max(_s.Value, 100)
+                                end
+                            end
+                        end
+                    end
+                end)
+                task.wait(0.5)
+            end
+        end)
+    else
+        _Util.notify("Inf Stamina", "DISABLED", 2)
+    end
+end
+
+-- No Cooldown
+_Features.noCooldown = function(enabled)
+    _States.no_cooldown = enabled
+    if enabled then
+        _Util.notify("No Cooldown", "ENABLED", 2)
+        task.spawn(function()
+            while _States.no_cooldown do
+                pcall(function()
+                    -- Search for cooldown values
+                    local _char = _Util.getCharacter()
+                    if _char then
+                        for _, _v in ipairs(_char:GetDescendants()) do
+                            local _n = _v.Name:lower()
+                            if string.find(_n, "cooldown") or string.find(_n, "cd") or
+                               string.find(_n, "timer") or string.find(_n, "debounce") then
+                                if _v:IsA("NumberValue") or _v:IsA("IntValue") then
+                                    _v.Value = 0
+                                elseif _v:IsA("BoolValue") then
+                                    _v.Value = false
+                                end
+                            end
+                        end
+                    end
+
+                    -- GUI cooldown elements
+                    local _pg = _LP:FindFirstChild("PlayerGui")
+                    if _pg then
+                        for _, _g in ipairs(_pg:GetDescendants()) do
+                            local _n = _g.Name:lower()
+                            if string.find(_n, "cooldown") or string.find(_n, "cd") then
+                                if _g:IsA("Frame") then
+                                    _g.Visible = false
+                                end
+                            end
+                        end
+                    end
+                end)
+                task.wait(0.1)
+            end
+        end)
+    else
+        _Util.notify("No Cooldown", "DISABLED", 2)
+    end
+end
+
+-- Anti-AFK
+_Features.antiAFK = function(enabled)
+    _States.anti_afk = enabled
+    if enabled then
+        _Util.notify("Anti-AFK", "ENABLED", 2)
+        pcall(function()
+            local _vu = game:GetService("VirtualUser")
+            local _conn = _LP.Idled:Connect(function()
+                if _States.anti_afk then
+                    _vu:Button2Down(Vector2.new(0, 0), _WS.CurrentCamera.CFrame)
+                    _rnd_delay(0.1, 0.3)
+                    _vu:Button2Up(Vector2.new(0, 0), _WS.CurrentCamera.CFrame)
+                end
+            end)
+            _addConnection("anti_afk", _conn)
+        end)
+    else
+        _removeConnection("anti_afk")
+        _Util.notify("Anti-AFK", "DISABLED", 2)
+    end
+end
+
+-- God Mode
+_Features.godMode = function(enabled)
+    _States.god_mode = enabled
+    if enabled then
+        _Util.notify("God Mode", "ENABLED (may not work in all games)", 2)
+        task.spawn(function()
+            while _States.god_mode do
+                pcall(function()
+                    local _hum = _Util.getHumanoid()
+                    if _hum then
+                        _hum.MaxHealth = math.huge
+                        _hum.Health = math.huge
+                    end
+
+                    -- Also try ForceField
+                    local _char = _Util.getCharacter()
+                    if _char then
+                        if not _char:FindFirstChildOfClass("ForceField") then
+                            local _ff = Instance.new("ForceField")
+                            _ff.Visible = false
+                            _ff.Parent = _char
+                        end
+                    end
+                end)
+                task.wait(0.5)
+            end
+            -- Cleanup
+            pcall(function()
+                local _char = _Util.getCharacter()
+                if _char then
+                    local _ff = _char:FindFirstChildOfClass("ForceField")
+                    if _ff then _ff:Destroy() end
+                end
+            end)
+        end)
+    else
+        pcall(function()
+            local _char = _Util.getCharacter()
+            if _char then
+                local _ff = _char:FindFirstChildOfClass("ForceField")
+                if _ff then _ff:Destroy() end
+                local _hum = _char:FindFirstChildOfClass("Humanoid")
+                if _hum then
+                    _hum.MaxHealth = 100
+                    _hum.Health = 100
+                end
+            end
+        end)
+        _Util.notify("God Mode", "DISABLED", 2)
+    end
+end
+
+-- Infinite Bait
+_Features.infBait = function(enabled)
+    _States.inf_bait = enabled
+    if enabled then
+        _Util.notify("Inf Bait", "ENABLED", 2)
+        task.spawn(function()
+            while _States.inf_bait do
+                pcall(function()
+                    -- Try to find bait values
+                    local _data_folders = {
+                        _LP:FindFirstChild("Data"),
+                        _LP:FindFirstChild("Stats"),
+                        _LP:FindFirstChild("PlayerData"),
+                        _LP:FindFirstChild("leaderstats"),
+                    }
+                    for _, _folder in ipairs(_data_folders) do
+                        if _folder then
+                            for _, _v in ipairs(_folder:GetDescendants()) do
+                                local _n = _v.Name:lower()
+                                if string.find(_n, "bait") then
+                                    if _v:IsA("NumberValue") or _v:IsA("IntValue") then
+                                        _v.Value = math.max(_v.Value, 999)
+                                    end
+                                end
+                            end
+                        end
+                    end
+
+                    -- Also try bait remote
+                    if _GameData.remotes.bait then
+                        _Util.fireRemote(_GameData.remotes.bait, "Refill")
+                    end
+                end)
+                _rnd_delay(1, 3)
+            end
+        end)
+    else
+        _Util.notify("Inf Bait", "DISABLED", 2)
+    end
+end
+
+-- ============================================================
+-- SECTION 4E: ECONOMY/FARMING
+-- ============================================================
+
+-- Auto Collect Rewards
+_Features.autoCollect = function(enabled)
+    _States.auto_collect = enabled
+    if enabled then
+        _Util.notify("Auto Collect", "ENABLED", 2)
+        task.spawn(function()
+            while _States.auto_collect do
+                pcall(function()
+                    if _GameData.remotes.collect then
+                        _Util.fireRemote(_GameData.remotes.collect)
+                    end
+
+                    -- Try clicking all reward buttons in GUI
+                    local _pg = _LP:FindFirstChild("PlayerGui")
+                    if _pg then
+                        for _, _g in ipairs(_pg:GetDescendants()) do
+                            if (_g:IsA("TextButton") or _g:IsA("ImageButton")) and _g.Visible then
+                                local _n = _g.Name:lower()
+                                local _t = ""
+                                pcall(function() _t = _g.Text:lower() end)
+                                if string.find(_n, "collect") or string.find(_n, "claim") or
+                                   string.find(_n, "reward") or string.find(_t, "collect") or
+                                   string.find(_t, "claim") then
+                                    pcall(function()
+                                        if firesignal then
+                                            firesignal(_g.MouseButton1Click)
+                                        end
+                                    end)
+                                    _rnd_delay(0.2, 0.5)
+                                end
+                            end
+                        end
+                    end
+
+                    -- Try proximity prompts for rewards
+                    local _hrp = _Util.getHRP()
+                    if _hrp then
+                        for _, _obj in ipairs(_WS:GetDescendants()) do
+                            if _obj:IsA("ProximityPrompt") then
+                                local _n = _obj.Name:lower()
+                                local _pn = _obj.Parent and _obj.Parent.Name:lower() or ""
+                                if string.find(_n, "collect") or string.find(_n, "reward") or
+                                   string.find(_pn, "reward") or string.find(_pn, "collect") then
+                                    pcall(function()
+                                        local _pos = _obj.Parent.Position or _obj.Parent:GetBoundingBox().Position
+                                        if (_hrp.Position - _pos).Magnitude < 100 then
+                                            fireproximityprompt(_obj)
+                                        end
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end)
+                _rnd_delay(10, 30)
+            end
+        end)
+    else
+        _Util.notify("Auto Collect", "DISABLED", 2)
+    end
+end
+
+-- Auto Daily Reward
+_Features.autoDaily = function(enabled)
+    _States.auto_daily = enabled
+    if enabled then
+        task.spawn(function()
+            _Util.notify("Auto Daily", "Attempting to collect daily reward...", 3)
+            pcall(function()
+                -- Find daily reward GUI and click
+                local _pg = _LP:FindFirstChild("PlayerGui")
+                if _pg then
+                    for _, _g in ipairs(_pg:GetDescendants()) do
+                        if (_g:IsA("TextButton") or _g:IsA("ImageButton")) then
+                            local _n = _g.Name:lower()
+                            local _t = ""
+                            pcall(function() _t = _g.Text:lower() end)
+                            if string.find(_n, "daily") or string.find(_t, "daily") or
+                               string.find(_n, "login") or string.find(_t, "login") then
+                                pcall(function()
+                                    if firesignal then
+                                        firesignal(_g.MouseButton1Click)
+                                    end
+                                end)
+                                _Util.notify("Auto Daily", "Daily reward claimed!", 3)
+                            end
+                        end
                     end
                 end
-            elseif loc == "Event Area" then
-                -- implement similar
-            elseif loc == "Secret Spot" then
-                -- implement
+
+                -- Also try remote
+                local _daily_remote = _Util.findRemote("daily") or _Util.findRemote("login")
+                if _daily_remote then
+                    _Util.fireRemote(_daily_remote)
+                end
+            end)
+            _States.auto_daily = false
+        end)
+    end
+end
+
+-- Auto Quest
+_Features.autoQuest = function(enabled)
+    _States.auto_quest = enabled
+    if enabled then
+        _Util.notify("Auto Quest", "ENABLED", 2)
+        task.spawn(function()
+            while _States.auto_quest do
+                pcall(function()
+                    if _GameData.remotes.quest then
+                        _Util.fireRemote(_GameData.remotes.quest, "Accept")
+                        _rnd_delay(0.5, 1)
+                        _Util.fireRemote(_GameData.remotes.quest, "Complete")
+                        _rnd_delay(0.5, 1)
+                        _Util.fireRemote(_GameData.remotes.quest, "Claim")
+                    end
+                end)
+                _rnd_delay(15, 30)
             end
         end)
-        y = y + 35
+    else
+        _Util.notify("Auto Quest", "DISABLED", 2)
     end
-    local autoFarmBtn = Instance.new("TextButton")
-    autoFarmBtn.Size = UDim2.new(0, 200, 0, 30)
-    autoFarmBtn.Position = UDim2.new(0, 10, 0, y)
-    autoFarmBtn.Text = "Auto-Farm Route: OFF"
-    autoFarmBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    autoFarmBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    autoFarmBtn.Font = Enum.Font.Gotham
-    autoFarmBtn.TextSize = 14
-    autoFarmBtn.Parent = scroll
-    local autoState = false
-    autoFarmBtn.MouseButton1Click:Connect(function()
-        autoState = not autoState
-        autoFarmBtn.Text = "Auto-Farm Route: " .. (autoState and "ON" or "OFF")
-        setFeature("autoFarmRoute", autoState)
-    end)
-    y = y + 35
-    scroll.CanvasSize = UDim2.new(0, 0, 0, y)
 end
 
-function loadVisualTab()
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.BackgroundTransparency = 1
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.Parent = ContentFrame
-    
-    local y = 5
-    local function addToggle(label, flag)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 200, 0, 30)
-        btn.Position = UDim2.new(0, 10, 0, y)
-        btn.Text = label .. ": OFF"
-        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-        btn.TextColor3 = Color3.fromRGB(255,255,255)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 14
-        btn.Parent = scroll
-        local state = false
-        btn.MouseButton1Click:Connect(function()
-            state = not state
-            btn.Text = label .. (state and ": ON" or ": OFF")
-            setFeature(flag, state)
+-- Auto Buy Best Rod
+_Features.autoBuyRod = function(enabled)
+    _States.auto_buy_rod = enabled
+    if enabled then
+        _Util.notify("Auto Buy Rod", "Attempting to buy best rod...", 3)
+        task.spawn(function()
+            pcall(function()
+                if _GameData.remotes.buy then
+                    -- Try to buy the best rod
+                    local _rods = {"Legendary Rod", "Diamond Rod", "Gold Rod", "Platinum Rod",
+                                   "Titanium Rod", "Steel Rod", "Iron Rod", "Wooden Rod"}
+                    for _, _rod in ipairs(_rods) do
+                        local _ok = _Util.fireRemote(_GameData.remotes.buy, _rod)
+                        if _ok then
+                            _Util.notify("Auto Buy", "Attempted to buy: " .. _rod, 2)
+                            break
+                        end
+                        _rnd_delay(0.3, 0.5)
+                    end
+                end
+            end)
+            _States.auto_buy_rod = false
         end)
-        y = y + 35
     end
-    
-    addToggle("Player ESP", "playerESP")
-    addToggle("Item ESP", "itemESP")
-    addToggle("NPC ESP", "npcESP")
-    addToggle("Treasure/Chest ESP", "treasureESP")
-    addToggle("Fullbright", "fullbright")
-    addToggle("No Fog", "noFog")
-    addToggle("No Water Effect", "noWaterEffect")
-    
-    local fovSlider = Instance.new("TextButton")
-    fovSlider.Size = UDim2.new(0, 200, 0, 30)
-    fovSlider.Position = UDim2.new(0, 10, 0, y)
-    fovSlider.Text = "Custom FOV: 70"
-    fovSlider.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    fovSlider.TextColor3 = Color3.fromRGB(255,255,255)
-    fovSlider.Font = Enum.Font.Gotham
-    fovSlider.TextSize = 14
-    fovSlider.Parent = scroll
-    local fov = 70
-    fovSlider.MouseButton1Click:Connect(function()
-        fov = fov + 5
-        if fov > 120 then fov = 70 end
-        fovSlider.Text = "Custom FOV: " .. fov
-        Features.customFOV = fov
-        game:GetService("Workspace").CurrentCamera.FieldOfView = fov
-    end)
-    y = y + 35
-    scroll.CanvasSize = UDim2.new(0, 0, 0, y)
 end
 
-function loadPlayerTab()
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.BackgroundTransparency = 1
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.Parent = ContentFrame
-    
-    local y = 5
-    local function addToggle(label, flag)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 200, 0, 30)
-        btn.Position = UDim2.new(0, 10, 0, y)
-        btn.Text = label .. ": OFF"
-        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-        btn.TextColor3 = Color3.fromRGB(255,255,255)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 14
-        btn.Parent = scroll
-        local state = false
-        btn.MouseButton1Click:Connect(function()
-            state = not state
-            btn.Text = label .. (state and ": ON" or ": OFF")
-            setFeature(flag, state)
+-- Auto Upgrade
+_Features.autoUpgrade = function(enabled)
+    _States.auto_upgrade = enabled
+    if enabled then
+        _Util.notify("Auto Upgrade", "ENABLED", 2)
+        task.spawn(function()
+            while _States.auto_upgrade do
+                pcall(function()
+                    if _GameData.remotes.upgrade then
+                        _Util.fireRemote(_GameData.remotes.upgrade, "Rod")
+                        _rnd_delay(0.5, 1)
+                        _Util.fireRemote(_GameData.remotes.upgrade, "Bait")
+                        _rnd_delay(0.5, 1)
+                        _Util.fireRemote(_GameData.remotes.upgrade, "Boat")
+                    end
+                end)
+                _rnd_delay(30, 60)
+            end
         end)
-        y = y + 35
+    else
+        _Util.notify("Auto Upgrade", "DISABLED", 2)
     end
-    
-    -- Speed slider
-    local speedSlider = Instance.new("TextButton")
-    speedSlider.Size = UDim2.new(0, 200, 0, 30)
-    speedSlider.Position = UDim2.new(0, 10, 0, y)
-    speedSlider.Text = "Speed: 16"
-    speedSlider.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    speedSlider.TextColor3 = Color3.fromRGB(255,255,255)
-    speedSlider.Font = Enum.Font.Gotham
-    speedSlider.TextSize = 14
-    speedSlider.Parent = scroll
-    local speed = 16
-    speedSlider.MouseButton1Click:Connect(function()
-        speed = speed + 2
-        if speed > 50 then speed = 16 end
-        speedSlider.Text = "Speed: " .. speed
-        Features.speedValue = speed
-        if Features.speedHack then
-            local char = Utility.getChar()
-            local hum = char and char:FindFirstChild("Humanoid")
-            if hum then hum.WalkSpeed = speed end
+end
+
+-- ============================================================
+-- SECTION 4F: UTILITY FEATURES
+-- ============================================================
+
+-- Server Hop
+_Features.serverHop = function()
+    _Util.notify("Server Hop", "Finding new server...", 3)
+    task.spawn(function()
+        pcall(function()
+            local _placeId = game.PlaceId
+            local _servers = {}
+
+            if _ENV_CHECK._req then
+                local _response = _ENV_CHECK._req({
+                    Url = string.format(
+                        "https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100",
+                        _placeId
+                    ),
+                    Method = "GET",
+                })
+
+                if _response and _response.Body then
+                    local _data = _HttpS:JSONDecode(_response.Body)
+                    if _data and _data.data then
+                        for _, _server in ipairs(_data.data) do
+                            if _server.playing < _server.maxPlayers and
+                               _server.id ~= game.JobId then
+                                table.insert(_servers, _server.id)
+                            end
+                        end
+                    end
+                end
+            end
+
+            if #_servers > 0 then
+                local _target = _servers[math.random(1, #_servers)]
+                _TP:TeleportToPlaceInstance(_placeId, _target, _LP)
+            else
+                -- Fallback: just rejoin
+                _TP:Teleport(_placeId, _LP)
+            end
+        end)
+    end)
+end
+
+-- Rejoin
+_Features.rejoin = function()
+    _Util.notify("Rejoin", "Rejoining server...", 2)
+    pcall(function()
+        _TP:TeleportToPlaceInstance(game.PlaceId, game.JobId, _LP)
+    end)
+end
+
+-- FPS Booster
+_Features.fpsBoost = function(enabled)
+    _States.fps_boost = enabled
+    if enabled then
+        _Util.notify("FPS Boost", "ENABLED - Removing unnecessary effects", 3)
+        pcall(function()
+            -- Reduce rendering quality
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+
+            -- Remove particles, beams, trails
+            for _, _obj in ipairs(_WS:GetDescendants()) do
+                pcall(function()
+                    if _obj:IsA("ParticleEmitter") or _obj:IsA("Trail") or
+                       _obj:IsA("Beam") or _obj:IsA("Fire") or
+                       _obj:IsA("Smoke") or _obj:IsA("Sparkles") or
+                       _obj:IsA("PointLight") or _obj:IsA("SpotLight") or
+                       _obj:IsA("SurfaceLight") then
+                        _obj.Enabled = false
+                    end
+
+                    -- Reduce texture quality
+                    if _obj:IsA("Decal") or _obj:IsA("Texture") then
+                        _obj.Transparency = 1
+                    end
+
+                    -- Remove grass/foliage
+                    if _obj:IsA("BasePart") then
+                        local _n = _obj.Name:lower()
+                        if string.find(_n, "grass") or string.find(_n, "leaf") or
+                           string.find(_n, "flower") or string.find(_n, "bush") or
+                           string.find(_n, "tree") or string.find(_n, "decor") then
+                            if not _obj:FindFirstChildOfClass("ClickDetector") and
+                               not _obj:FindFirstChildOfClass("ProximityPrompt") then
+                                _obj.Transparency = 1
+                                _obj.CanCollide = false
+                            end
+                        end
+                        _obj.Material = Enum.Material.SmoothPlastic
+                        _obj.Reflectance = 0
+                    end
+
+                    if _obj:IsA("MeshPart") then
+                        _obj.TextureID = ""
+                    end
+                end)
+            end
+
+            -- Remove post-processing
+            for _, _e in ipairs(_Lighting:GetChildren()) do
+                if _e:IsA("PostEffect") or _e:IsA("BloomEffect") or
+                   _e:IsA("BlurEffect") or _e:IsA("ColorCorrectionEffect") or
+                   _e:IsA("DepthOfFieldEffect") or _e:IsA("SunRaysEffect") then
+                    _e.Enabled = false
+                end
+                if _e:IsA("Atmosphere") then
+                    _e.Density = 0
+                end
+            end
+
+            -- Disable terrain details
+            if _WS.Terrain then
+                _WS.Terrain.WaterWaveSize = 0
+                _WS.Terrain.WaterWaveSpeed = 0
+                _WS.Terrain.Decoration = false
+            end
+        end)
+    else
+        pcall(function()
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+        end)
+        _Util.notify("FPS Boost", "DISABLED (some changes require rejoin)", 3)
+    end
+end
+
+-- Chat Spam
+_Features.chatSpam = function(enabled, message)
+    _States.chat_spam = enabled
+    _States.chat_message = message or _States.chat_message
+    if enabled then
+        _Util.notify("Chat Spam", "ENABLED", 2)
+        task.spawn(function()
+            while _States.chat_spam do
+                pcall(function()
+                    -- Fire chat remote
+                    local _chat_remote = _Util.findRemote("SayMessageRequest") or
+                                         _Util.findRemote("Chat") or
+                                         _Util.findRemote("SendMessage")
+                    if _chat_remote then
+                        _Util.fireRemote(_chat_remote, _States.chat_message, "All")
+                    else
+                        -- Fallback: use legacy chat
+                        game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
+                            :FindFirstChild("SayMessageRequest"):FireServer(_States.chat_message, "All")
+                    end
+                end)
+                _rnd_delay(2, 5)
+            end
+        end)
+    else
+        _Util.notify("Chat Spam", "DISABLED", 2)
+    end
+end
+
+-- ============================================================
+-- SECTION 5: UI SETUP (CUSTOM GUI)
+-- ============================================================
+
+-- Attempt to load Rayfield UI Library (or fallback to custom)
+local _UI_Lib = nil
+local _UI_Window = nil
+local _UI_Loaded = false
+
+local function _createUI()
+    -- Try loading Rayfield first
+    local _ok, _lib = pcall(function()
+        return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    end)
+
+    if _ok and _lib then
+        _UI_Lib = _lib
+        _UI_Loaded = true
+
+        _UI_Window = _UI_Lib:CreateWindow({
+            Name = "Script KimJong v2.0 - Fish It",
+            LoadingTitle = "Script KimJong",
+            LoadingSubtitle = "by KimJong Dev Team",
+            ConfigurationSaving = {
+                Enabled = false,
+            },
+            KeySystem = false,
+        })
+
+        -- =====================
+        -- TAB: FISHING
+        -- =====================
+        local _tabFishing = _UI_Window:CreateTab("🎣 Fishing", 4483362458)
+
+        local _secAutoFish = _tabFishing:CreateSection("Auto Fishing")
+
+        _tabFishing:CreateToggle({
+            Name = "Auto Fish",
+            CurrentValue = false,
+            Flag = "auto_fish",
+            Callback = function(v)
+                _Features.autoFish(v)
+            end,
+        })
+
+        _tabFishing:CreateToggle({
+            Name = "Auto Perfect Catch",
+            CurrentValue = false,
+            Flag = "auto_perfect",
+            Callback = function(v)
+                _Features.autoPerfect(v)
+            end,
+        })
+
+        _tabFishing:CreateToggle({
+            Name = "Auto Reel",
+            CurrentValue = false,
+            Flag = "auto_reel",
+            Callback = function(v)
+                _Features.autoReel(v)
+            end,
+        })
+
+        _tabFishing:CreateToggle({
+            Name = "Instant Fish (Risky!)",
+            CurrentValue = false,
+            Flag = "instant_fish",
+            Callback = function(v)
+                _Features.instantFish(v)
+            end,
+        })
+
+        _tabFishing:CreateToggle({
+            Name = "Auto Sell Fish",
+            CurrentValue = false,
+            Flag = "auto_sell",
+            Callback = function(v)
+                _Features.autoSell(v)
+            end,
+        })
+
+        _tabFishing:CreateToggle({
+            Name = "Fish ESP",
+            CurrentValue = false,
+            Flag = "fish_esp",
+            Callback = function(v)
+                _Features.fishESP(v)
+            end,
+        })
+
+        _tabFishing:CreateToggle({
+            Name = "Rare Fish Notification",
+            CurrentValue = false,
+            Flag = "rare_notify",
+            Callback = function(v)
+                _Features.rareNotify(v)
+            end,
+        })
+
+        _tabFishing:CreateToggle({
+            Name = "Auto Equip Best Rod",
+            CurrentValue = false,
+            Flag = "auto_equip",
+            Callback = function(v)
+                _Features.autoEquipRod(v)
+            end,
+        })
+
+        _tabFishing:CreateDropdown({
+            Name = "Target Fish",
+            Options = {"All", "Common", "Uncommon", "Rare", "Epic", "Legendary"},
+            CurrentOption = {"All"},
+            MultiOption = false,
+            Flag = "target_fish",
+            Callback = function(v)
+                _States.target_fish = v[1] or v
+            end,
+        })
+
+        -- =====================
+        -- TAB: TELEPORT
+        -- =====================
+        local _tabTP = _UI_Window:CreateTab("📍 Teleport", 4483362458)
+
+        _tabTP:CreateSection("Quick Teleport")
+
+        -- Build dropdown options
+        _updateTeleportLocations()
+        local _tp_options = {}
+        for _name, _ in pairs(_TeleportLocations) do
+            table.insert(_tp_options, _name)
         end
-    end)
-    y = y + 35
-    
-    addToggle("Speed Hack", "speedHack")
-    addToggle("Fly Hack", "flyHack")
-    addToggle("Noclip", "noclip")
-    addToggle("Infinite Jump", "infiniteJump")
-    addToggle("Infinite Stamina", "infiniteStamina")
-    addToggle("No Cooldown", "noCooldown")
-    addToggle("Anti-AFK", "antiAFK")
-    addToggle("God Mode", "godMode")
-    addToggle("Infinite Bait", "infiniteBait")
-    
-    scroll.CanvasSize = UDim2.new(0, 0, 0, y)
-end
+        -- Add defaults if empty
+        if #_tp_options == 0 then
+            _tp_options = {"Fishing Spot 1", "Shop", "Sell Area", "Spawn", "Event Area"}
+        end
 
-function loadFarmTab()
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.BackgroundTransparency = 1
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.Parent = ContentFrame
-    
-    local y = 5
-    local function addToggle(label, flag)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 200, 0, 30)
-        btn.Position = UDim2.new(0, 10, 0, y)
-        btn.Text = label .. ": OFF"
-        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-        btn.TextColor3 = Color3.fromRGB(255,255,255)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 14
-        btn.Parent = scroll
-        local state = false
-        btn.MouseButton1Click:Connect(function()
-            state = not state
-            btn.Text = label .. (state and ": ON" or ": OFF")
-            setFeature(flag, state)
-        end)
-        y = y + 35
-    end
-    
-    addToggle("Auto Collect Rewards", "autoCollectRewards")
-    addToggle("Auto Daily Reward", "autoDaily")
-    addToggle("Auto Quest/Mission", "autoQuest")
-    addToggle("Auto Buy Best Rod", "autoBuyBestRod")
-    addToggle("Auto Upgrade", "autoUpgrade")
-    
-    scroll.CanvasSize = UDim2.new(0, 0, 0, y)
-end
+        _tabTP:CreateDropdown({
+            Name = "Select Location",
+            Options = _tp_options,
+            CurrentOption = {_tp_options[1]},
+            MultiOption = false,
+            Flag = "tp_location",
+            Callback = function(v)
+                -- Just store selection
+            end,
+        })
 
-function loadMiscTab()
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.BackgroundTransparency = 1
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.Parent = ContentFrame
-    
-    local y = 5
-    local function addToggle(label, flag)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 200, 0, 30)
-        btn.Position = UDim2.new(0, 10, 0, y)
-        btn.Text = label .. ": OFF"
-        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-        btn.TextColor3 = Color3.fromRGB(255,255,255)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 14
-        btn.Parent = scroll
-        local state = false
-        btn.MouseButton1Click:Connect(function()
-            state = not state
-            btn.Text = label .. (state and ": ON" or ": OFF")
-            setFeature(flag, state)
-        end)
-        y = y + 35
-    end
-    
-    local serverHop = Instance.new("TextButton")
-    serverHop.Size = UDim2.new(0, 200, 0, 30)
-    serverHop.Position = UDim2.new(0, 10, 0, y)
-    serverHop.Text = "Server Hop"
-    serverHop.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    serverHop.TextColor3 = Color3.fromRGB(255,255,255)
-    serverHop.Font = Enum.Font.Gotham
-    serverHop.TextSize = 14
-    serverHop.Parent = scroll
-    serverHop.MouseButton1Click:Connect(function()
-        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
-    end)
-    y = y + 35
-    
-    local rejoin = Instance.new("TextButton")
-    rejoin.Size = UDim2.new(0, 200, 0, 30)
-    rejoin.Position = UDim2.new(0, 10, 0, y)
-    rejoin.Text = "Rejoin Server"
-    rejoin.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    rejoin.TextColor3 = Color3.fromRGB(255,255,255)
-    rejoin.Font = Enum.Font.Gotham
-    rejoin.TextSize = 14
-    rejoin.Parent = scroll
-    rejoin.MouseButton1Click:Connect(function()
-        game:GetService("TeleportService"):Teleport(game.PlaceId)
-    end)
-    y = y + 35
-    
-    addToggle("FPS Booster", "fpsBooster")
-    addToggle("Screenshot Mode", "screenshotMode")
-    addToggle("Chat Spam", "chatSpam")
-    
-    local spamMsgInput = Instance.new("TextBox")
-    spamMsgInput.Size = UDim2.new(0, 200, 0, 30)
-    spamMsgInput.Position = UDim2.new(0, 10, 0, y)
-    spamMsgInput.PlaceholderText = "Spam message"
-    spamMsgInput.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    spamMsgInput.TextColor3 = Color3.fromRGB(255,255,255)
-    spamMsgInput.Font = Enum.Font.Gotham
-    spamMsgInput.TextSize = 14
-    spamMsgInput.Parent = scroll
-    spamMsgInput:GetPropertyChangedSignal("Text"):Connect(function()
-        Features.spamMessage = spamMsgInput.Text
-    end)
-    y = y + 35
-    
-    addToggle("Anti-Report", "antiReport")
-    
-    scroll.CanvasSize = UDim2.new(0, 0, 0, y)
-end
+        _tabTP:CreateButton({
+            Name = "Teleport to Selected",
+            Callback = function()
+                local _loc = _UI_Lib.Flags["tp_location"] or _tp_options[1]
+                if type(_loc) == "table" then _loc = _loc[1] end
+                _Features.teleportTo(_loc)
+            end,
+        })
 
-function loadSettingsTab()
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.BackgroundTransparency = 1
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.Parent = ContentFrame
-    
-    local y = 5
-    local reapply = Instance.new("TextButton")
-    reapply.Size = UDim2.new(0, 200, 0, 30)
-    reapply.Position = UDim2.new(0, 10, 0, y)
-    reapply.Text = "Re-apply Anti Detection"
-    reapply.BackgroundColor3 = Color3.fromRGB(60,60,60)
-    reapply.TextColor3 = Color3.fromRGB(255,255,255)
-    reapply.Font = Enum.Font.Gotham
-    reapply.TextSize = 14
-    reapply.Parent = scroll
-    reapply.MouseButton1Click:Connect(function()
-        initAntiDetection()
-        Utility.notify("Anti-detection re-applied", 2)
-    end)
-    y = y + 35
-    scroll.CanvasSize = UDim2.new(0, 0, 0, y)
-end
+        _tabTP:CreateSection("Auto Route")
 
--- Load default tab (Fishing)
-loadFishingTab()
+        _tabTP:CreateToggle({
+            Name = "Auto Farm Route",
+            CurrentValue = false,
+            Flag = "auto_route",
+            Callback = function(v)
+                _Features.autoFarmRoute(v)
+            end,
+        })
 
--- Keybind toggle UI
-local UserInputService = game:GetService("UserInputService")
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.RightShift then
-        UI.Enabled = not UI.Enabled
-    end
-end)
+        _tabTP:CreateSection("Player Teleport")
 
--- Initial notification
-Utility.notify("Script KimJong v"..ScriptVersion.." loaded. Press RightShift to toggle UI.", 3)
-
--- Cleanup on script end
-local function cleanUp()
-    for _, conn in pairs(Toggles) do
-        if conn then
-            if type(conn) == "thread" then
-                coroutine.close(conn)
-            elseif conn.Disconnect then
-                conn:Disconnect()
+        -- Player teleport dropdown
+        local _player_names = {}
+        for _, _p in ipairs(_Players:GetPlayers()) do
+            if _p ~= _LP then
+                table.insert(_player_names, _p.Name)
             end
         end
+        if #_player_names == 0 then _player_names = {"No players"} end
+
+        _tabTP:CreateDropdown({
+            Name = "Select Player",
+            Options = _player_names,
+            CurrentOption = {_player_names[1]},
+            MultiOption = false,
+            Flag = "tp_player",
+            Callback = function(v) end,
+        })
+
+        _tabTP:CreateButton({
+            Name = "Teleport to Player",
+            Callback = function()
+                pcall(function()
+                    local _target_name = _UI_Lib.Flags["tp_player"]
+                    if type(_target_name) == "table" then _target_name = _target_name[1] end
+                    local _target = _Players:FindFirstChild(_target_name)
+                    if _target and _target.Character then
+                        local _hrp = _target.Character:FindFirstChild(_STR._hrp)
+                        if _hrp then
+                            _Util.teleportTo(_hrp.CFrame + Vector3.new(0, 3, 5))
+                            _Util.notify("Teleport", "Teleported to " .. _target_name, 2)
+                        end
+                    end
+                end)
+            end,
+        })
+
+        -- =====================
+        -- TAB: ESP/VISUAL
+        -- =====================
+        local _tabESP = _UI_Window:CreateTab("👁️ ESP/Visual", 4483362458)
+
+        _tabESP:CreateSection("ESP Features")
+
+        _tabESP:CreateToggle({
+            Name = "Fish ESP",
+            CurrentValue = false,
+            Flag = "fish_esp_2",
+            Callback = function(v)
+                _Features.fishESP(v)
+            end,
+        })
+
+        _tabESP:CreateToggle({
+            Name = "Player ESP",
+            CurrentValue = false,
+            Flag = "player_esp",
+            Callback = function(v)
+                _Features.playerESP(v)
+            end,
+        })
+
+        _tabESP:CreateToggle({
+            Name = "Item ESP",
+            CurrentValue = false,
+            Flag = "item_esp",
+            Callback = function(v)
+                _Features.itemESP(v)
+            end,
+        })
+
+        _tabESP:CreateToggle({
+            Name = "NPC ESP",
+            CurrentValue = false,
+            Flag = "npc_esp",
+            Callback = function(v)
+                _Features.npcESP(v)
+            end,
+        })
+
+        _tabESP:CreateToggle({
+            Name = "Treasure/Chest ESP",
+            CurrentValue = false,
+            Flag = "treasure_esp",
+            Callback = function(v)
+                _Features.treasureESP(v)
+            end,
+        })
+
+        _tabESP:CreateSection("Visual Settings")
+
+        _tabESP:CreateToggle({
+            Name = "Fullbright",
+            CurrentValue = false,
+            Flag = "fullbright",
+            Callback = function(v)
+                _Features.fullbright(v)
+            end,
+        })
+
+        _tabESP:CreateToggle({
+            Name = "No Fog",
+            CurrentValue = false,
+            Flag = "no_fog",
+            Callback = function(v)
+                _Features.noFog(v)
+            end,
+        })
+
+        _tabESP:CreateToggle({
+            Name = "No Water Effect",
+            CurrentValue = false,
+            Flag = "no_water",
+            Callback = function(v)
+                _Features.noWater(v)
+            end,
+        })
+
+        _tabESP:CreateSlider({
+            Name = "Field of View (FOV)",
+            Range = {30, 120},
+            Increment = 1,
+            Suffix = "°",
+            CurrentValue = 70,
+            Flag = "fov",
+            Callback = function(v)
+                _Features.setFOV(v)
+            end,
+        })
+
+        -- =====================
+        -- TAB: PLAYER
+        -- =====================
+        local _tabPlayer = _UI_Window:CreateTab("🧑 Player", 4483362458)
+
+        _tabPlayer:CreateSection("Movement")
+
+        _tabPlayer:CreateToggle({
+            Name = "Speed Hack",
+            CurrentValue = false,
+            Flag = "speed_hack",
+            Callback = function(v)
+                _Features.speedHack(v, _States.speed_value)
+            end,
+        })
+
+        _tabPlayer:CreateSlider({
+            Name = "Walk Speed",
+            Range = {16, 50},
+            Increment = 1,
+            Suffix = " studs/s",
+            CurrentValue = 16,
+            Flag = "speed_val",
+            Callback = function(v)
+                _States.speed_value = v
+                if _States.speed_hack then
+                    _Features.speedHack(true, v)
+                end
+            end,
+        })
+
+        _tabPlayer:CreateToggle({
+            Name = "Fly Hack",
+            CurrentValue = false,
+            Flag = "fly_hack",
+            Callback = function(v)
+                _Features.flyHack(v)
+            end,
+        })
+
+        _tabPlayer:CreateToggle({
+            Name = "Noclip",
+            CurrentValue = false,
+            Flag = "noclip",
+            Callback = function(v)
+                _Features.noclip(v)
+            end,
+        })
+
+        _tabPlayer:CreateToggle({
+            Name = "Infinite Jump",
+            CurrentValue = false,
+            Flag = "inf_jump",
+            Callback = function(v)
+                _Features.infiniteJump(v)
+            end,
+        })
+
+        _tabPlayer:CreateSection("Buffs")
+
+        _tabPlayer:CreateToggle({
+            Name = "Infinite Stamina",
+            CurrentValue = false,
+            Flag = "inf_stamina",
+            Callback = function(v)
+                _Features.infStamina(v)
+            end,
+        })
+
+        _tabPlayer:CreateToggle({
+            Name = "No Rod Cooldown",
+            CurrentValue = false,
+            Flag = "no_cd",
+            Callback = function(v)
+                _Features.noCooldown(v)
+            end,
+        })
+
+        _tabPlayer:CreateToggle({
+            Name = "God Mode",
+            CurrentValue = false,
+            Flag = "god_mode",
+            Callback = function(v)
+                _Features.godMode(v)
+            end,
+        })
+
+        _tabPlayer:CreateToggle({
+            Name = "Infinite Bait",
+            CurrentValue = false,
+            Flag = "inf_bait",
+            Callback = function(v)
+                _Features.infBait(v)
+            end,
+        })
+
+        -- =====================
+        -- TAB: FARM
+        -- =====================
+        local _tabFarm = _UI_Window:CreateTab("💰 Farm", 4483362458)
+
+        _tabFarm:CreateSection("Auto Farm")
+
+        _tabFarm:CreateToggle({
+            Name = "Auto Collect Rewards",
+            CurrentValue = false,
+            Flag = "auto_collect",
+            Callback = function(v)
+                _Features.autoCollect(v)
+            end,
+        })
+
+        _tabFarm:CreateButton({
+            Name = "Collect Daily Reward",
+            Callback = function()
+                _Features.autoDaily(true)
+            end,
+        })
+
+        _tabFarm:CreateToggle({
+            Name = "Auto Quest/Mission",
+            CurrentValue = false,
+            Flag = "auto_quest",
+            Callback = function(v)
+                _Features.autoQuest(v)
+            end,
+        })
+
+        _tabFarm:CreateButton({
+            Name = "Auto Buy Best Rod",
+            Callback = function()
+                _Features.autoBuyRod(true)
+            end,
+        })
+
+        _tabFarm:CreateToggle({
+            Name = "Auto Upgrade",
+            CurrentValue = false,
+            Flag = "auto_upgrade",
+            Callback = function(v)
+                _Features.autoUpgrade(v)
+            end,
+        })
+
+        -- =====================
+        -- TAB: MISC/UTILITY
+        -- =====================
+        local _tabMisc = _UI_Window:CreateTab("🔧 Misc", 4483362458)
+
+        _tabMisc:CreateSection("Server")
+
+        _tabMisc:CreateButton({
+            Name = "Server Hop",
+            Callback = function()
+                _Features.serverHop()
+            end,
+        })
+
+        _tabMisc:CreateButton({
+            Name = "Rejoin Server",
+            Callback = function()
+                _Features.rejoin()
+            end,
+        })
+
+        _tabMisc:CreateSection("Performance")
+
+        _tabMisc:CreateToggle({
+            Name = "FPS Booster",
+            CurrentValue = false,
+            Flag = "fps_boost",
+            Callback = function(v)
+                _Features.fpsBoost(v)
+            end,
+        })
+
+        _tabMisc:CreateSection("Other")
+
+        _tabMisc:CreateToggle({
+            Name = "Anti-AFK",
+            CurrentValue = false,
+            Flag = "anti_afk",
+            Callback = function(v)
+                _Features.antiAFK(v)
+            end,
+        })
+
+        _tabMisc:CreateToggle({
+            Name = "Chat Spam",
+            CurrentValue = false,
+            Flag = "chat_spam",
+            Callback = function(v)
+                _Features.chatSpam(v, _States.chat_message)
+            end,
+        })
+
+        _tabMisc:CreateInput({
+            Name = "Chat Message",
+            PlaceholderText = "Enter message...",
+            RemoveTextAfterFocusLost = false,
+            Callback = function(text)
+                _States.chat_message = text
+            end,
+        })
+
+        -- =====================
+        -- TAB: SETTINGS
+        -- =====================
+        local _tabSettings = _UI_Window:CreateTab("⚙️ Settings", 4483362458)
+
+        _tabSettings:CreateSection("Anti-Cheat")
+
+        _tabSettings:CreateToggle({
+            Name = "Anti-Cheat Bypass",
+            CurrentValue = true,
+            Flag = "ac_bypass",
+            Callback = function(v)
+                _AC_Module._enabled = v
+                _States.ac_bypass = v
+                _Util.notify("Anti-Cheat", v and "Bypass ENABLED" or "Bypass DISABLED", 2)
+            end,
+        })
+
+        _tabSettings:CreateSection("UI Settings")
+
+        _tabSettings:CreateKeybind({
+            Name = "Toggle UI",
+            CurrentKeybind = "RightShift",
+            Flag = "toggle_ui",
+            Callback = function(keybind)
+                -- Rayfield handles this internally
+            end,
+        })
+
+        _tabSettings:CreateSection("Script Info")
+
+        _tabSettings:CreateParagraph({
+            Title = "Script KimJong v2.0",
+            Content = "Game: Fish It\nAnti-Cheat: " ..
+                      (_AC_Module._enabled and "Active ✅" or "Inactive ❌") ..
+                      "\nRemotes Found: " .. tostring(
+                          (function()
+                              local _c = 0
+                              for _, _v in pairs(_GameData.remotes) do
+                                  if _v then _c = _c + 1 end
+                              end
+                              return _c
+                          end)()
+                      ) ..
+                      "\nFishing Spots: " .. #_GameData.locations.fishing_spots ..
+                      "\n\n⚠️ Educational purpose only!"
+        })
+
+        _tabSettings:CreateButton({
+            Name = "Re-Analyze Game",
+            Callback = function()
+                _analyze_game()
+                _updateTeleportLocations()
+                _Util.notify("Analysis", "Game re-analyzed! Found " ..
+                    #_GameData.locations.fishing_spots .. " fishing spots.", 3)
+            end,
+        })
+
+        _tabSettings:CreateButton({
+            Name = "Destroy Script",
+            Callback = function()
+                _cleanup()
+            end,
+        })
+
+        return true
+
+    else
+        -- ============================================================
+        -- FALLBACK: CUSTOM MINIMAL GUI
+        -- ============================================================
+        warn("[KimJong] Rayfield failed to load, creating fallback GUI...")
+
+        local _sg = Instance.new("ScreenGui")
+        _sg.Name = "_kj_" .. _rng_name()
+        _sg.ResetOnSpawn = false
+        _sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+        pcall(function()
+            if syn and syn.protect_gui then
+                syn.protect_gui(_sg)
+            end
+            _sg.Parent = game:GetService("CoreGui")
+        end)
+
+        if not _sg.Parent then
+            _sg.Parent = _LP:FindFirstChild("PlayerGui")
+        end
+
+        -- Main Frame
+        local _main = Instance.new("Frame")
+        _main.Name = "Main"
+        _main.Size = UDim2.new(0, 500, 0, 400)
+        _main.Position = UDim2.new(0.5, -250, 0.5, -200)
+        _main.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+        _main.BorderSizePixel = 0
+        _main.Active = true
+        _main.Draggable = true
+        _main.Parent = _sg
+
+        -- Corner
+        local _corner = Instance.new("UICorner")
+        _corner.CornerRadius = UDim.new(0, 10)
+        _corner.Parent = _main
+
+        -- Title Bar
+        local _title = Instance.new("TextLabel")
+        _title.Name = "Title"
+        _title.Size = UDim2.new(1, 0, 0, 40)
+        _title.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+        _title.BorderSizePixel = 0
+        _title.Text = "  🐟 Script KimJong v2.0 - Fish It"
+        _title.TextColor3 = Color3.fromRGB(0, 200, 255)
+        _title.TextXAlignment = Enum.TextXAlignment.Left
+        _title.Font = Enum.Font.GothamBold
+        _title.TextSize = 16
+        _title.Parent = _main
+
+        local _title_corner = Instance.new("UICorner")
+        _title_corner.CornerRadius = UDim.new(0, 10)
+        _title_corner.Parent = _title
+
+        -- Close button
+        local _close = Instance.new("TextButton")
+        _close.Size = UDim2.new(0, 30, 0, 30)
+        _close.Position = UDim2.new(1, -35, 0, 5)
+        _close.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        _close.Text = "X"
+        _close.TextColor3 = Color3.fromRGB(255, 255, 255)
+        _close.Font = Enum.Font.GothamBold
+        _close.TextSize = 14
+        _close.Parent = _title
+
+        local _close_corner = Instance.new("UICorner")
+        _close_corner.CornerRadius = UDim.new(0, 6)
+        _close_corner.Parent = _close
+
+        -- Minimize button
+        local _minimize = Instance.new("TextButton")
+        _minimize.Size = UDim2.new(0, 30, 0, 30)
+        _minimize.Position = UDim2.new(1, -70, 0, 5)
+        _minimize.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+        _minimize.Text = "-"
+        _minimize.TextColor3 = Color3.fromRGB(0, 0, 0)
+        _minimize.Font = Enum.Font.GothamBold
+        _minimize.TextSize = 18
+        _minimize.Parent = _title
+
+        local _min_corner = Instance.new("UICorner")
+        _min_corner.CornerRadius = UDim.new(0, 6)
+        _min_corner.Parent = _minimize
+
+        -- Scroll Frame for buttons
+        local _scroll = Instance.new("ScrollingFrame")
+        _scroll.Name = "Content"
+        _scroll.Size = UDim2.new(1, -20, 1, -50)
+        _scroll.Position = UDim2.new(0, 10, 0, 45)
+        _scroll.BackgroundTransparency = 1
+        _scroll.ScrollBarThickness = 4
+        _scroll.ScrollBarImageColor3 = Color3.fromRGB(0, 200, 255)
+        _scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        _scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        _scroll.Parent = _main
+
+        local _layout = Instance.new("UIListLayout")
+        _layout.SortOrder = Enum.SortOrder.LayoutOrder
+        _layout.Padding = UDim.new(0, 5)
+        _layout.Parent = _scroll
+
+        -- Helper: Create toggle button
+        local function _createToggleBtn(name, order, callback)
+            local _btn = Instance.new("TextButton")
+            _btn.Name = name
+            _btn.Size = UDim2.new(1, -10, 0, 35)
+            _btn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+            _btn.Text = "  ❌ " .. name
+            _btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            _btn.TextXAlignment = Enum.TextXAlignment.Left
+            _btn.Font = Enum.Font.Gotham
+            _btn.TextSize = 14
+            _btn.LayoutOrder = order
+            _btn.Parent = _scroll
+
+            local _bc = Instance.new("UICorner")
+            _bc.CornerRadius = UDim.new(0, 6)
+            _bc.Parent = _btn
+
+            local _toggled = false
+            _btn.MouseButton1Click:Connect(function()
+                _toggled = not _toggled
+                _btn.Text = _toggled and ("  ✅ " .. name) or ("  ❌ " .. name)
+                _btn.BackgroundColor3 = _toggled and Color3.fromRGB(0, 80, 40) or Color3.fromRGB(40, 40, 55)
+                pcall(callback, _toggled)
+            end)
+
+            return _btn
+        end
+
+        local function _createActionBtn(name, order, callback)
+            local _btn = Instance.new("TextButton")
+            _btn.Name = name
+            _btn.Size = UDim2.new(1, -10, 0, 35)
+            _btn.BackgroundColor3 = Color3.fromRGB(0, 100, 180)
+            _btn.Text = "  ▶ " .. name
+            _btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            _btn.TextXAlignment = Enum.TextXAlignment.Left
+            _btn.Font = Enum.Font.Gotham
+            _btn.TextSize = 14
+            _btn.LayoutOrder = order
+            _btn.Parent = _scroll
+
+            local _bc = Instance.new("UICorner")
+            _bc.CornerRadius = UDim.new(0, 6)
+            _bc.Parent = _btn
+
+            _btn.MouseButton1Click:Connect(function()
+                pcall(callback)
+            end)
+
+            return _btn
+        end
+
+        local function _createSectionLabel(name, order)
+            local _lbl = Instance.new("TextLabel")
+            _lbl.Size = UDim2.new(1, -10, 0, 25)
+            _lbl.BackgroundTransparency = 1
+            _lbl.Text = "═══ " .. name .. " ═══"
+            _lbl.TextColor3 = Color3.fromRGB(0, 200, 255)
+            _lbl.Font = Enum.Font.GothamBold
+            _lbl.TextSize = 13
+            _lbl.LayoutOrder = order
+            _lbl.Parent = _scroll
+        end
+
+        -- Build fallback GUI
+        local _o = 0
+
+        _createSectionLabel("🎣 FISHING", _o); _o = _o + 1
+        _createToggleBtn("Auto Fish", _o, function(v) _Features.autoFish(v) end); _o = _o + 1
+        _createToggleBtn("Auto Perfect Catch", _o, function(v) _Features.autoPerfect(v) end); _o = _o + 1
+        _createToggleBtn("Auto Reel", _o, function(v) _Features.autoReel(v) end); _o = _o + 1
+        _createToggleBtn("Instant Fish", _o, function(v) _Features.instantFish(v) end); _o = _o + 1
+        _createToggleBtn("Auto Sell Fish", _o, function(v) _Features.autoSell(v) end); _o = _o + 1
+        _createToggleBtn("Fish ESP", _o, function(v) _Features.fishESP(v) end); _o = _o + 1
+        _createToggleBtn("Rare Fish Notify", _o, function(v) _Features.rareNotify(v) end); _o = _o + 1
+        _createToggleBtn("Auto Equip Best Rod", _o, function(v) _Features.autoEquipRod(v) end); _o = _o + 1
+
+        _createSectionLabel("📍 TELEPORT", _o); _o = _o + 1
+        _createActionBtn("TP: Fishing Spot 1", _o, function() _Features.teleportTo("Fishing Spot 1") end); _o = _o + 1
+        _createActionBtn("TP: Fishing Spot 2", _o, function() _Features.teleportTo("Fishing Spot 2") end); _o = _o + 1
+        _createActionBtn("TP: Shop", _o, function() _Features.teleportTo("Shop") end); _o = _o + 1
+        _createActionBtn("TP: Sell Area", _o, function() _Features.teleportTo("Sell Area") end); _o = _o + 1
+        _createActionBtn("TP: Spawn", _o, function() _Features.teleportTo("Spawn") end); _o = _o + 1
+        _createToggleBtn("Auto Farm Route", _o, function(v) _Features.autoFarmRoute(v) end); _o = _o + 1
+
+        _createSectionLabel("👁️ ESP/VISUAL", _o); _o = _o + 1
+        _createToggleBtn("Player ESP", _o, function(v) _Features.playerESP(v) end); _o = _o + 1
+        _createToggleBtn("Item ESP", _o, function(v) _Features.itemESP(v) end); _o = _o + 1
+        _createToggleBtn("NPC ESP", _o, function(v) _Features.npcESP(v) end); _o = _o + 1
+        _createToggleBtn("Treasure ESP", _o, function(v) _Features.treasureESP(v) end); _o = _o + 1
+        _createToggleBtn("Fullbright", _o, function(v) _Features.fullbright(v) end); _o = _o + 1
+        _createToggleBtn("No Fog", _o, function(v) _Features.noFog(v) end); _o = _o + 1
+        _createToggleBtn("No Water Effect", _o, function(v) _Features.noWater(v) end); _o = _o + 1
+
+        _createSectionLabel("🧑 PLAYER", _o); _o = _o + 1
+        _createToggleBtn("Speed Hack", _o, function(v) _Features.speedHack(v, 32) end); _o = _o + 1
+        _createToggleBtn("Fly Hack", _o, function(v) _Features.flyHack(v) end); _o = _o + 1
+        _createToggleBtn("Noclip", _o, function(v) _Features.noclip(v) end); _o = _o + 1
+        _createToggleBtn("Infinite Jump", _o, function(v) _Features.infiniteJump(v) end); _o = _o + 1
+        _createToggleBtn("Infinite Stamina", _o, function(v) _Features.infStamina(v) end); _o = _o + 1
+        _createToggleBtn("No Cooldown", _o, function(v) _Features.noCooldown(v) end); _o = _o + 1
+        _createToggleBtn("God Mode", _o, function(v) _Features.godMode(v) end); _o = _o + 1
+        _createToggleBtn("Infinite Bait", _o, function(v) _Features.infBait(v) end); _o = _o + 1
+
+        _createSectionLabel("💰 FARM", _o); _o = _o + 1
+        _createToggleBtn("Auto Collect Rewards", _o, function(v) _Features.autoCollect(v) end); _o = _o + 1
+        _createActionBtn("Collect Daily Reward", _o, function() _Features.autoDaily(true) end); _o = _o + 1
+        _createToggleBtn("Auto Quest", _o, function(v) _Features.autoQuest(v) end); _o = _o + 1
+        _createActionBtn("Auto Buy Best Rod", _o, function() _Features.autoBuyRod(true) end); _o = _o + 1
+        _createToggleBtn("Auto Upgrade", _o, function(v) _Features.autoUpgrade(v) end); _o = _o + 1
+
+        _createSectionLabel("🔧 UTILITY", _o); _o = _o + 1
+        _createToggleBtn("Anti-AFK", _o, function(v) _Features.antiAFK(v) end); _o = _o + 1
+        _createToggleBtn("FPS Booster", _o, function(v) _Features.fpsBoost(v) end); _o = _o + 1
+        _createActionBtn("Server Hop", _o, function() _Features.serverHop() end); _o = _o + 1
+        _createActionBtn("Rejoin Server", _o, function() _Features.rejoin() end); _o = _o + 1
+        _createToggleBtn("Chat Spam", _o, function(v) _Features.chatSpam(v) end); _o = _o + 1
+
+        _createSectionLabel("⚙️ SETTINGS", _o); _o = _o + 1
+        _createToggleBtn("Anti-Cheat Bypass", _o, function(v)
+            _AC_Module._enabled = v
+        end); _o = _o + 1
+        _createActionBtn("Re-Analyze Game", _o, function()
+            _analyze_game()
+            _Util.notify("Analysis", "Game re-analyzed!", 3)
+        end); _o = _o + 1
+        _createActionBtn("Destroy Script", _o, function()
+            _cleanup()
+        end); _o = _o + 1
+
+        -- Close button logic
+        _close.MouseButton1Click:Connect(function()
+            _sg:Destroy()
+        end)
+
+        -- Minimize logic
+        local _minimized = false
+        _minimize.MouseButton1Click:Connect(function()
+            _minimized = not _minimized
+            _scroll.Visible = not _minimized
+            if _minimized then
+                _main.Size = UDim2.new(0, 500, 0, 45)
+                _minimize.Text = "+"
+            else
+                _main.Size = UDim2.new(0, 500, 0, 400)
+                _minimize.Text = "-"
+            end
+        end)
+
+        -- Toggle UI with RightShift
+        _UIS.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.KeyCode == Enum.KeyCode.RightShift then
+                _sg.Enabled = not _sg.Enabled
+            end
+        end)
+
+        _UI_Loaded = true
+        return true
     end
-    if UI then UI:Destroy() end
-    if OriginalKick then Player.Kick = OriginalKick end
 end
 
-game:GetService("RunService").Heartbeat:Wait()
-cleanUp() -- Ensure cleanup when script is stopped
+-- ============================================================
+-- SECTION 6: CLEANUP FUNCTION
+-- ============================================================
+
+function _cleanup()
+    _Util.notify("Script KimJong", "Cleaning up and unloading...", 3)
+
+    -- Disable all features
+    for _key, _val in pairs(_States) do
+        if type(_val) == "boolean" then
+            _States[_key] = false
+        end
+    end
+
+    -- Wait for features to stop
+    task.wait(0.5)
+
+    -- Disconnect all connections
+    for _name, _conn in pairs(_Connections) do
+        pcall(function() _conn:Disconnect() end)
+    end
+    _Connections = {}
+
+    -- Clear ESP
+    for _cat, _ in pairs(_esp_objects) do
+        _clearESP(_cat)
+    end
+
+    -- Remove fly parts
+    pcall(function()
+        if _flyBody then _flyBody:Destroy() end
+        if _flyGyro then _flyGyro:Destroy() end
+    end)
+
+    -- Reset player
+    pcall(function()
+        local _hum = _Util.getHumanoid()
+        if _hum then
+            _hum.WalkSpeed = 16
+            _hum.JumpPower = 50
+        end
+    end)
+
+    -- Reset camera
+    pcall(function()
+        _WS.CurrentCamera.FieldOfView = 70
+    end)
+
+    -- Disable anti-cheat module
+    _AC_Module._enabled = false
+
+    -- Destroy UI
+    pcall(function()
+        if _UI_Lib and _UI_Lib.Destroy then
+            _UI_Lib:Destroy()
+        end
+    end)
+
+    -- Destroy fallback GUI
+    pcall(function()
+        local _cg = game:GetService("CoreGui")
+        for _, _g in ipairs(_cg:GetChildren()) do
+            if _g:IsA("ScreenGui") and string.find(_g.Name, "_kj_") then
+                _g:Destroy()
+            end
+        end
+    end)
+
+    warn("[Script KimJong] Unloaded successfully.")
+end
+
+-- ============================================================
+-- SECTION 7: MAIN INITIALIZATION
+-- ============================================================
+
+local function _main()
+    print("╔══════════════════════════════════════╗")
+    print("║    Script KimJong v2.0 - Fish It     ║")
+    print("║    Loading...                         ║")
+    print("╚══════════════════════════════════════╝")
+
+    -- Step 1: Initialize Anti-Detection
+    print("[1/4] Initializing anti-detection...")
+    local _ac_results = _init_anti_detection()
+    print("  Namecall hook: " .. tostring(_ac_results.namecall))
+    print("  Index hook: " .. tostring(_ac_results.index))
+    print("  Newindex hook: " .. tostring(_ac_results.newindex))
+    print("  AC connections: " .. tostring(_ac_results.connections))
+
+    task.wait(0.5)
+
+    -- Step 2: Analyze Game
+    print("[2/4] Analyzing game structure...")
+    _analyze_game()
+
+    local _remote_count = 0
+    for _, _v in pairs(_GameData.remotes) do
+        if _v then _remote_count = _remote_count + 1 end
+    end
+    print("  Remotes found: " .. _remote_count)
+    print("  Fishing spots: " .. #_GameData.locations.fishing_spots)
+    print("  NPCs found: " .. #_GameData.npcs)
+    print("  Treasures found: " .. #_GameData.treasures)
+    print("  Blocked AC remotes: " .. (function()
+        local _c = 0
+        for _ in pairs(_AC_Module._blocked_remotes) do _c = _c + 1 end
+        return _c
+    end)())
+
+    task.wait(0.5)
+
+    -- Step 3: Auto-enable Anti-AFK
+    print("[3/4] Enabling Anti-AFK...")
+    _Features.antiAFK(true)
+
+    -- Step 4: Create UI
+    print("[4/4] Creating UI...")
+    local _ui_ok = _createUI()
+
+    if _ui_ok then
+        print("╔══════════════════════════════════════╗")
+        print("║    Script KimJong v2.0 LOADED! ✅    ║")
+        print("║    Press RightShift to toggle UI     ║")
+        print("╚══════════════════════════════════════╝")
+
+        _Util.notify("Script KimJong v2.0",
+            "Loaded successfully!\n" ..
+            "Remotes: " .. _remote_count .. "\n" ..
+            "Spots: " .. #_GameData.locations.fishing_spots .. "\n" ..
+            "Press RightShift to toggle UI", 5)
+    else
+        warn("[KimJong] UI failed to load!")
+        _Util.notify("Script KimJong", "UI failed! Check console.", 5)
+    end
+
+    -- Character respawn handler
+    _LP.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        -- Re-apply active features after respawn
+        if _States.speed_hack then
+            _Features.speedHack(true, _States.speed_value)
+        end
+        if _States.noclip then
+            _Features.noclip(true)
+        end
+        if _States.god_mode then
+            _Features.godMode(true)
+        end
+        if _States.fly_hack then
+            _Features.flyHack(true)
+        end
+    end)
+end
+
+-- ============================================================
+-- SECTION 8: EXECUTE
+-- ============================================================
+local _boot_ok, _boot_err = pcall(_main)
+if not _boot_ok then
+    warn("[Script KimJong] BOOT ERROR: " .. tostring(_boot_err))
+    pcall(function()
+        _Util.notify("Script KimJong", "Error loading! Check console.\n" .. tostring(_boot_err), 10)
+    end)
+end
