@@ -1,0 +1,1353 @@
+--[[
+    ╔══════════════════════════════════════════════════════════╗
+    ║               kimjong sc | v1.0                         ║
+    ║         Advanced Fishing Game Script Hub                 ║
+    ║                                                          ║
+    ║   Developer Notes:                                       ║
+    ║   - Menggunakan Rayfield UI Library                      ║
+    ║   - Semua fitur dibungkus pcall untuk anti-crash         ║
+    ║   - Optimized loop dengan task.wait() bukan wait()       ║
+    ║   - Modular structure untuk maintenance mudah            ║
+    ╚══════════════════════════════════════════════════════════╝
+--]]
+
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 0: SAFETY CHECK & SERVICES INITIALIZATION
+-- ═══════════════════════════════════════════════════════════
+
+-- Cegah double-execution
+if getgenv().KimJongLoaded then
+    warn("[kimjong sc] Script sudah berjalan. Menghentikan eksekusi duplikat.")
+    return
+end
+getgenv().KimJongLoaded = true
+
+-- Service references (di-cache untuk performa)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
+local Backpack = LocalPlayer:WaitForChild("Backpack")
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Auto-refresh character reference saat respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+    Humanoid = char:WaitForChild("Humanoid")
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 1: STATE MANAGEMENT (Toggle variables)
+-- ═══════════════════════════════════════════════════════════
+
+local State = {
+    -- Main Tab
+    AutoCast = false,
+    AutoReel = false,
+    AutoSell = false,
+    EquippedRod = nil,
+
+    -- Visuals Tab
+    FishESP = false,
+    ChestESP = false,
+
+    -- Misc Tab
+    AntiAFK = false,
+    WalkSpeed = 16,     -- default Roblox
+    JumpPower = 50,     -- default Roblox
+
+    -- Internal
+    ESPObjects = {},
+    Connections = {},
+    LoopRunning = {},
+}
+
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 2: UTILITY / HELPER FUNCTIONS
+-- ═══════════════════════════════════════════════════════════
+
+local Utilities = {}
+
+--- Safe pcall wrapper dengan error logging
+---@param funcName string Nama fungsi untuk logging
+---@param func function Fungsi yang akan dijalankan
+---@param ... any Argumen tambahan
+---@return boolean, any
+function Utilities.SafeCall(funcName, func, ...)
+    local success, result = pcall(func, ...)
+    if not success then
+        warn(string.format("[kimjong sc] Error di %s: %s", funcName, tostring(result)))
+    end
+    return success, result
+end
+
+--- Teleport karakter ke posisi CFrame tertentu
+---@param targetCFrame CFrame Posisi tujuan
+function Utilities.TeleportTo(targetCFrame)
+    Utilities.SafeCall("TeleportTo", function()
+        if Character and HumanoidRootPart then
+            -- Matikan physics sesaat untuk teleport yang mulus
+            HumanoidRootPart.CFrame = targetCFrame
+        end
+    end)
+end
+
+--- Cari remote event/function di ReplicatedStorage secara rekursif
+---@param name string Nama remote yang dicari
+---@param parent Instance Parent tempat mencari (default: ReplicatedStorage)
+---@return Instance|nil
+function Utilities.FindRemote(name, parent)
+    parent = parent or ReplicatedStorage
+    local remote = nil
+    Utilities.SafeCall("FindRemote", function()
+        -- Cari langsung
+        remote = parent:FindFirstChild(name, true)
+        if not remote then
+            -- Fallback: cari di seluruh descendants
+            for _, v in ipairs(parent:GetDescendants()) do
+                if v.Name == name and (v:IsA("RemoteEvent") or v:IsA("RemoteFunction")) then
+                    remote = v
+                    break
+                end
+            end
+        end
+    end)
+    return remote
+end
+
+--- Buat ESP BillboardGui pada suatu instance
+---@param target Instance Object target untuk ESP
+---@param text string Teks yang ditampilkan
+---@param color Color3 Warna teks
+---@param category string Kategori ESP (untuk tracking cleanup)
+---@return BillboardGui|nil
+function Utilities.CreateESP(target, text, color, category)
+    local billboard = nil
+    Utilities.SafeCall("CreateESP", function()
+        -- Cek duplikat
+        if target:FindFirstChild("KimJongESP") then
+            target:FindFirstChild("KimJongESP"):Destroy()
+        end
+
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "KimJongESP"
+        billboard.Adornee = target
+        billboard.Size = UDim2.new(0, 200, 0, 50)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Parent = target
+
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Name = "ESPLabel"
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.TextColor3 = color
+        textLabel.TextStrokeTransparency = 0.3
+        textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.TextSize = 14
+        textLabel.TextScaled = false
+        textLabel.Text = text
+        textLabel.Parent = billboard
+
+        -- Track untuk cleanup nanti
+        table.insert(State.ESPObjects, {
+            Billboard = billboard,
+            Target = target,
+            Label = textLabel,
+            Category = category
+        })
+    end)
+    return billboard
+end
+
+--- Hapus semua ESP berdasarkan kategori
+---@param category string Kategori ESP yang mau dihapus
+function Utilities.ClearESP(category)
+    Utilities.SafeCall("ClearESP", function()
+        local remaining = {}
+        for _, espData in ipairs(State.ESPObjects) do
+            if espData.Category == category then
+                if espData.Billboard and espData.Billboard.Parent then
+                    espData.Billboard:Destroy()
+                end
+            else
+                table.insert(remaining, espData)
+            end
+        end
+        State.ESPObjects = remaining
+    end)
+end
+
+--- Mendapatkan jarak antara player dan posisi tertentu
+---@param position Vector3
+---@return number
+function Utilities.GetDistance(position)
+    if HumanoidRootPart then
+        return (HumanoidRootPart.Position - position).Magnitude
+    end
+    return math.huge
+end
+
+--- Mencari semua rod di inventory player
+---@return table<string>
+function Utilities.GetRodsInInventory()
+    local rods = {}
+    Utilities.SafeCall("GetRodsInInventory", function()
+        -- Cek Backpack
+        for _, item in ipairs(Backpack:GetChildren()) do
+            if item:IsA("Tool") then
+                local nameLower = item.Name:lower()
+                if nameLower:find("rod") or nameLower:find("pole")
+                   or nameLower:find("joran") or nameLower:find("fishing") then
+                    table.insert(rods, item.Name)
+                end
+            end
+        end
+        -- Cek yang sedang di-equip di Character
+        if Character then
+            for _, item in ipairs(Character:GetChildren()) do
+                if item:IsA("Tool") then
+                    local nameLower = item.Name:lower()
+                    if nameLower:find("rod") or nameLower:find("pole")
+                       or nameLower:find("joran") or nameLower:find("fishing") then
+                        -- Hindari duplikat
+                        local found = false
+                        for _, r in ipairs(rods) do
+                            if r == item.Name then found = true; break end
+                        end
+                        if not found then
+                            table.insert(rods, item.Name)
+                        end
+                    end
+                end
+            end
+        end
+        -- Fallback: jika tidak ada yang cocok, tambahkan semua Tool
+        if #rods == 0 then
+            for _, item in ipairs(Backpack:GetChildren()) do
+                if item:IsA("Tool") then
+                    table.insert(rods, item.Name)
+                end
+            end
+        end
+    end)
+    return rods
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 3: CORE FEATURE MODULES
+-- ═══════════════════════════════════════════════════════════
+
+local Features = {}
+
+-- ───────────────────────────────────────────────────────────
+-- 3A. AUTO CAST MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.StartAutoCast()
+    if State.LoopRunning.AutoCast then return end
+    State.LoopRunning.AutoCast = true
+
+    task.spawn(function()
+        while State.AutoCast and State.LoopRunning.AutoCast do
+            Utilities.SafeCall("AutoCast_Loop", function()
+                -- Metode 1: Cari RemoteEvent untuk casting
+                local castRemote = Utilities.FindRemote("Cast")
+                    or Utilities.FindRemote("cast")
+                    or Utilities.FindRemote("CastRod")
+                    or Utilities.FindRemote("ThrowRod")
+                    or Utilities.FindRemote("UseTool")
+
+                if castRemote then
+                    if castRemote:IsA("RemoteEvent") then
+                        castRemote:FireServer()
+                    elseif castRemote:IsA("RemoteFunction") then
+                        castRemote:InvokeServer()
+                    end
+                else
+                    -- Metode 2: Simulasi klik mouse (fallback)
+                    -- Aktivasi tool yang sedang di-hold
+                    if Character then
+                        local tool = Character:FindFirstChildOfClass("Tool")
+                        if tool then
+                            tool:Activate()
+                        end
+                    end
+                end
+            end)
+            task.wait(2.5) -- Interval cast (disesuaikan agar realistis)
+        end
+        State.LoopRunning.AutoCast = false
+    end)
+end
+
+function Features.StopAutoCast()
+    State.LoopRunning.AutoCast = false
+end
+
+-- ───────────────────────────────────────────────────────────
+-- 3B. AUTO REEL / AUTO CATCH MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.StartAutoReel()
+    if State.LoopRunning.AutoReel then return end
+    State.LoopRunning.AutoReel = true
+
+    task.spawn(function()
+        while State.AutoReel and State.LoopRunning.AutoReel do
+            Utilities.SafeCall("AutoReel_Loop", function()
+                -- Strategi 1: Intercept RemoteEvent untuk reel/catch
+                local reelRemote = Utilities.FindRemote("Reel")
+                    or Utilities.FindRemote("reel")
+                    or Utilities.FindRemote("ReelIn")
+                    or Utilities.FindRemote("CatchFish")
+                    or Utilities.FindRemote("Catch")
+                    or Utilities.FindRemote("Pull")
+
+                if reelRemote then
+                    if reelRemote:IsA("RemoteEvent") then
+                        reelRemote:FireServer()
+                    elseif reelRemote:IsA("RemoteFunction") then
+                        reelRemote:InvokeServer()
+                    end
+                end
+
+                -- Strategi 2: Bypass mini-game UI
+                -- Cari dan auto-click tombol di mini-game memancing
+                if PlayerGui then
+                    for _, gui in ipairs(PlayerGui:GetDescendants()) do
+                        if gui:IsA("TextButton") or gui:IsA("ImageButton") then
+                            local nameLower = gui.Name:lower()
+                            if (nameLower:find("reel") or nameLower:find("catch")
+                                or nameLower:find("pull") or nameLower:find("hook")
+                                or nameLower:find("tap") or nameLower:find("click")) then
+                                if gui.Visible then
+                                    -- Fire semua event click
+                                    for _, conn in ipairs(getconnections(gui.MouseButton1Click)) do
+                                        conn:Fire()
+                                    end
+                                    for _, conn in ipairs(getconnections(gui.Activated)) do
+                                        conn:Fire()
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+
+                -- Strategi 3: Bypass progress bar mini-game
+                -- Beberapa game fishing menggunakan value internal
+                for _, v in ipairs(PlayerGui:GetDescendants()) do
+                    if v:IsA("NumberValue") or v:IsA("IntValue") then
+                        local nameLower = v.Name:lower()
+                        if nameLower:find("progress") or nameLower:find("reel")
+                           or nameLower:find("tension") then
+                            v.Value = v.Value + 100 -- Force max progress
+                        end
+                    end
+                end
+            end)
+            task.wait(0.15) -- Cek cepat untuk responsif
+        end
+        State.LoopRunning.AutoReel = false
+    end)
+end
+
+function Features.StopAutoReel()
+    State.LoopRunning.AutoReel = false
+end
+
+-- ───────────────────────────────────────────────────────────
+-- 3C. AUTO SELL MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.StartAutoSell()
+    if State.LoopRunning.AutoSell then return end
+    State.LoopRunning.AutoSell = true
+
+    task.spawn(function()
+        while State.AutoSell and State.LoopRunning.AutoSell do
+            Utilities.SafeCall("AutoSell_Loop", function()
+                -- Metode 1: Fire remote sell
+                local sellRemote = Utilities.FindRemote("Sell")
+                    or Utilities.FindRemote("sell")
+                    or Utilities.FindRemote("SellFish")
+                    or Utilities.FindRemote("SellAll")
+                    or Utilities.FindRemote("SellInventory")
+
+                if sellRemote then
+                    if sellRemote:IsA("RemoteEvent") then
+                        sellRemote:FireServer("All") -- Parameter umum
+                        sellRemote:FireServer()
+                    elseif sellRemote:IsA("RemoteFunction") then
+                        sellRemote:InvokeServer("All")
+                    end
+                end
+
+                -- Metode 2: Teleport ke NPC Merchant dan trigger proximity prompt
+                local merchantNPC = nil
+                for _, npc in ipairs(Workspace:GetDescendants()) do
+                    if npc:IsA("Model") or npc:IsA("Part") then
+                        local nameLower = npc.Name:lower()
+                        if nameLower:find("merchant") or nameLower:find("sell")
+                           or nameLower:find("shop") or nameLower:find("vendor") then
+                            merchantNPC = npc
+                            break
+                        end
+                    end
+                end
+
+                if merchantNPC then
+                    -- Trigger ProximityPrompt jika ada
+                    local prompt = merchantNPC:FindFirstChildOfClass("ProximityPrompt")
+                    if not prompt then
+                        prompt = merchantNPC:FindFirstChild("ProximityPrompt", true)
+                    end
+                    if prompt then
+                        fireproximityprompt(prompt)
+                    end
+                end
+            end)
+            task.wait(5) -- Cek setiap 5 detik
+        end
+        State.LoopRunning.AutoSell = false
+    end)
+end
+
+function Features.StopAutoSell()
+    State.LoopRunning.AutoSell = false
+end
+
+-- ───────────────────────────────────────────────────────────
+-- 3D. EQUIP ROD MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.EquipRod(rodName)
+    Utilities.SafeCall("EquipRod", function()
+        if not rodName or rodName == "" then return end
+
+        -- Cek di Backpack
+        local tool = Backpack:FindFirstChild(rodName)
+        if tool and tool:IsA("Tool") then
+            Humanoid:EquipTool(tool)
+            State.EquippedRod = rodName
+            return
+        end
+
+        -- Cek apakah sudah di Character (sudah di-equip)
+        if Character then
+            local equipped = Character:FindFirstChild(rodName)
+            if equipped and equipped:IsA("Tool") then
+                State.EquippedRod = rodName
+                return
+            end
+        end
+
+        warn("[kimjong sc] Rod tidak ditemukan: " .. rodName)
+    end)
+end
+
+-- ───────────────────────────────────────────────────────────
+-- 3E. FISH ESP MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.StartFishESP()
+    if State.LoopRunning.FishESP then return end
+    State.LoopRunning.FishESP = true
+
+    task.spawn(function()
+        while State.FishESP and State.LoopRunning.FishESP do
+            Utilities.SafeCall("FishESP_Loop", function()
+                -- Cari container ikan di workspace
+                local fishContainers = {}
+
+                -- Strategi: cari folder/model yang berisi ikan
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    local nameLower = obj.Name:lower()
+                    local isFish = nameLower:find("fish") or nameLower:find("ikan")
+                        or nameLower:find("catch") or nameLower:find("spawn")
+                        or nameLower:find("bobber") or nameLower:find("node")
+
+                    if isFish and (obj:IsA("Model") or obj:IsA("Part") or obj:IsA("MeshPart")) then
+                        -- Pastikan belum punya ESP
+                        if not obj:FindFirstChild("KimJongESP") then
+                            local position = nil
+                            if obj:IsA("Model") and obj.PrimaryPart then
+                                position = obj.PrimaryPart.Position
+                            elseif obj:IsA("BasePart") then
+                                position = obj.Position
+                            end
+
+                            if position then
+                                local distance = Utilities.GetDistance(position)
+                                local displayName = obj.Name
+                                local espText = string.format(
+                                    "🐟 %s\n[%.0f studs]",
+                                    displayName, distance
+                                )
+                                Utilities.CreateESP(
+                                    obj, espText,
+                                    Color3.fromRGB(0, 200, 255), -- Cyan
+                                    "Fish"
+                                )
+                            end
+                        else
+                            -- Update jarak pada ESP yang sudah ada
+                            local billboard = obj:FindFirstChild("KimJongESP")
+                            if billboard then
+                                local label = billboard:FindFirstChild("ESPLabel")
+                                if label then
+                                    local position = obj:IsA("Model")
+                                        and obj.PrimaryPart
+                                        and obj.PrimaryPart.Position
+                                        or obj:IsA("BasePart")
+                                        and obj.Position
+                                    if position then
+                                        local dist = Utilities.GetDistance(position)
+                                        label.Text = string.format(
+                                            "🐟 %s\n[%.0f studs]",
+                                            obj.Name, dist
+                                        )
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(1) -- Refresh ESP setiap 1 detik
+        end
+
+        -- Cleanup saat dimatikan
+        Utilities.ClearESP("Fish")
+        State.LoopRunning.FishESP = false
+    end)
+end
+
+function Features.StopFishESP()
+    State.LoopRunning.FishESP = false
+    Utilities.ClearESP("Fish")
+end
+-- ───────────────────────────────────────────────────────────
+-- 3F. CHEST/ITEM ESP MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.StartChestESP()
+    if State.LoopRunning.ChestESP then return end
+    State.LoopRunning.ChestESP = true
+
+    task.spawn(function()
+        while State.ChestESP and State.LoopRunning.ChestESP do
+            Utilities.SafeCall("ChestESP_Loop", function()
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    local nameLower = obj.Name:lower()
+                    local isChest = nameLower:find("chest") or nameLower:find("treasure")
+                        or nameLower:find("loot") or nameLower:find("crate")
+                        or nameLower:find("rare") or nameLower:find("item")
+                        or nameLower:find("collectible") or nameLower:find("peti")
+
+                    if isChest and (obj:IsA("Model") or obj:IsA("Part") or obj:IsA("MeshPart")) then
+                        if not obj:FindFirstChild("KimJongESP") then
+                            local position = nil
+                            if obj:IsA("Model") and obj.PrimaryPart then
+                                position = obj.PrimaryPart.Position
+                            elseif obj:IsA("BasePart") then
+                                position = obj.Position
+                            end
+                            
+                            if position then
+                                local distance = Utilities.GetDistance(position)
+                                local espText = string.format(
+                                    "📦 %s\n[%.0f studs]",
+                                    obj.Name, distance
+                                )
+                                Utilities.CreateESP(
+                                    obj, espText,
+                                    Color3.fromRGB(255, 200, 0), -- Gold
+                                    "Chest"
+                                )
+                            end
+                        else
+                            local billboard = obj:FindFirstChild("KimJongESP")
+                            if billboard then
+                                local label = billboard:FindFirstChild("ESPLabel")
+                                if label then
+                                    local position = obj:IsA("Model")
+                                        and obj.PrimaryPart
+                                        and obj.PrimaryPart.Position
+                                        or obj:IsA("BasePart")
+                                        and obj.Position
+                                    if position then
+                                        local dist = Utilities.GetDistance(position)
+                                        label.Text = string.format(
+                                            "📦 %s\n[%.0f studs]",
+                                            obj.Name, dist
+                                        )
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(2) -- Refresh setiap 2 detik
+        end
+
+        Utilities.ClearESP("Chest")
+        State.LoopRunning.ChestESP = false
+    end)
+end
+
+function Features.StopChestESP()
+    State.LoopRunning.ChestESP = false
+    Utilities.ClearESP("Chest")
+end
+-- ───────────────────────────────────────────────────────────
+-- 3G. ANTI-AFK MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.StartAntiAFK()
+    if State.LoopRunning.AntiAFK then return end
+    State.LoopRunning.AntiAFK = true
+
+    -- Disconnect default idle handler
+    Utilities.SafeCall("AntiAFK_Init", function()
+        local idleConn = LocalPlayer.Idled:Connect(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+        table.insert(State.Connections, idleConn)
+    end)
+
+    -- Backup: periodic virtual input
+    task.spawn(function()
+        while State.AntiAFK and State.LoopRunning.AntiAFK do
+            Utilities.SafeCall("AntiAFK_Loop", function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+            task.wait(60) -- Setiap 60 detik
+        end
+        State.LoopRunning.AntiAFK = false
+    end)
+end
+
+function Features.StopAntiAFK()
+    State.LoopRunning.AntiAFK = false
+end
+-- ───────────────────────────────────────────────────────────
+-- 3H. WALKSPEED & JUMPPOWER MODULE
+-- ───────────────────────────────────────────────────────────
+function Features.SetWalkSpeed(value)
+    Utilities.SafeCall("SetWalkSpeed", function()
+        State.WalkSpeed = value
+        if Humanoid then
+            Humanoid.WalkSpeed = value
+        end
+    end)
+end
+
+function Features.SetJumpPower(value)
+    Utilities.SafeCall("SetJumpPower", function()
+        State.JumpPower = value
+        if Humanoid then
+            Humanoid.UseJumpPower = true
+            Humanoid.JumpPower = value
+        end
+    end)
+end
+
+-- Persistent walkspeed/jumppower (reapply setelah respawn)
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    local hum = char:WaitForChild("Humanoid")
+    if hum then
+        if State.WalkSpeed ~= 16 then
+            hum.WalkSpeed = State.WalkSpeed
+        end
+        if State.JumpPower ~= 50 then
+            hum.UseJumpPower = true
+            hum.JumpPower = State.JumpPower
+        end
+    end
+end)
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 4: TELEPORT DATA (Pulau & NPC)
+-- ═══════════════════════════════════════════════════════════
+
+-- Koordinat ini perlu disesuaikan dengan game spesifik.
+-- Berikut template dengan contoh lokasi umum game Fisch.
+
+local TeleportData = {
+    Islands = {
+        ["🏝️ Spawn Island"]        = CFrame.new(0, 50, 0),
+        ["🌴 Tropical Island"]      = CFrame.new(500, 50, 200),
+        ["🏔️ Mountain Lake"]        = CFrame.new(-300, 100, 600),
+        ["🌊 Deep Ocean"]           = CFrame.new(1000, 30, 1000),
+        ["❄️ Frozen Lake"]          = CFrame.new(-800, 80, -400),
+        ["🌋 Volcano Island"]       = CFrame.new(1500, 60, -500),
+        ["🏖️ Sandy Beach"]          = CFrame.new(700, 40, -300),
+        ["🌙 Moonlight Pier"]       = CFrame.new(-500, 45, 900),
+        ["🎃 Haunted Dock"]         = CFrame.new(200, 50, -800),
+        ["💎 Crystal Cavern"]       = CFrame.new(-1000, 20, 500),
+    },
+    NPCs = {
+        ["🛒 Merchant (Sell Fish)"]  = CFrame.new(10, 50, 25),
+        ["🔧 Rod Upgrader"]         = CFrame.new(-20, 50, 30),
+        ["📋 Quest Giver"]          = CFrame.new(40, 50, -10),
+        ["🎣 Bait Shop"]            = CFrame.new(-15, 50, -25),
+        ["🏆 Leaderboard NPC"]      = CFrame.new(50, 50, 50),
+    }
+}
+
+-- Auto-detect lokasi dari Workspace (jika game punya named locations)
+Utilities.SafeCall("AutoDetectLocations", function()
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj:IsA("Model") or obj:IsA("Folder") then
+            local nameLower = obj.Name:lower()
+            if nameLower:find("island") or nameLower:find("zone")
+               or nameLower:find("area") or nameLower:find("region") then
+                local pos = nil
+                if obj:IsA("Model") and obj.PrimaryPart then
+                    pos = obj.PrimaryPart.CFrame
+                elseif obj:FindFirstChildOfClass("Part") then
+                    pos = obj:FindFirstChildOfClass("Part").CFrame
+                end
+                if pos then
+                    local displayName = "📍 " .. obj.Name
+                    if not TeleportData.Islands[displayName] then
+                        TeleportData.Islands[displayName] = pos
+                    end
+                end
+            end
+        end
+    end
+end)
+-- Convert ke list untuk dropdown
+local function GetIslandNames()
+    local names = {}
+    for name, _ in pairs(TeleportData.Islands) do
+        table.insert(names, name)
+    end
+    table.sort(names)
+    return names
+end
+
+local function GetNPCNames()
+    local names = {}
+    for name, _ in pairs(TeleportData.NPCs) do
+        table.insert(names, name)
+    end
+    table.sort(names)
+    return names
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 5: RAYFIELD UI SETUP
+-- ═══════════════════════════════════════════════════════════
+
+-- Load Rayfield Library
+local Rayfield = nil
+Utilities.SafeCall("LoadRayfield", function()
+    Rayfield = loadstring(game:HttpGet(
+        "https://sirius.menu/rayfield"
+    ))()
+end)
+
+if not Rayfield then
+    warn("[kimjong sc] FATAL: Gagal memuat Rayfield Library. Script dihentikan.")
+    getgenv().KimJongLoaded = false
+    return
+end
+-- ───────────────────────────────────────────────────────────
+-- 5A. CREATE MAIN WINDOW
+-- ───────────────────────────────────────────────────────────
+
+local Window = Rayfield:CreateWindow({
+    Name = "kimjong sc | v1.0",
+    LoadingTitle = "kimjong sc",
+    LoadingSubtitle = "Advanced Fishing Script Hub",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "kimjong_sc",
+        FileName = "config_v1"
+    },
+    Discord = {
+        Enabled = false,
+    },
+    KeySystem = false,
+})
+-- ───────────────────────────────────────────────────────────
+-- 5B. TAB 1: MAIN (Fishing)
+-- ───────────────────────────────────────────────────────────
+
+local MainTab = Window:CreateTab("🎣 Main", 4483362458)
+
+MainTab:CreateSection("Fishing Automation")
+
+-- Equip Rod Dropdown
+local rodList = Utilities.GetRodsInInventory()
+if #rodList == 0 then rodList = {"No Rods Found"} end
+
+local EquipRodDropdown = MainTab:CreateDropdown({
+    Name = "Equip Rod",
+    Options = rodList,
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "EquipRod",
+    Callback = function(selectedOptions)
+        local selected = selectedOptions[1] or selectedOptions
+        if selected and selected ~= "No Rods Found" then
+            Features.EquipRod(selected)
+            Rayfield:Notify({
+                Title = "Rod Equipped",
+                Content = "Memakai: " .. selected,
+                Duration = 3,
+            })
+        end
+    end,
+})
+-- Tombol refresh rod list
+MainTab:CreateButton({
+    Name = "🔄 Refresh Rod List",
+    Callback = function()
+        local newRods = Utilities.GetRodsInInventory()
+        if #newRods == 0 then newRods = {"No Rods Found"} end
+        EquipRodDropdown:Set(newRods)
+        Rayfield:Notify({
+            Title = "Rod List Refreshed",
+            Content = "Ditemukan " .. #newRods .. " rod(s).",
+            Duration = 3,
+        })
+    end,
+})
+MainTab:CreateDivider()
+
+-- Auto Cast Toggle
+MainTab:CreateToggle({
+    Name = "Auto Cast",
+    CurrentValue = false,
+    Flag = "AutoCast",
+    Callback = function(value)
+        State.AutoCast = value
+        if value then
+            Features.StartAutoCast()
+            Rayfield:Notify({
+                Title = "Auto Cast",
+                Content = "✅ Diaktifkan - Melempar kail otomatis",
+                Duration = 3,
+            })
+        else
+            Features.StopAutoCast()
+            Rayfield:Notify({
+                Title = "Auto Cast",
+                Content = "❌ Dimatikan",
+                Duration = 2,
+            })
+        end
+    end,
+})
+
+-- Auto Reel Toggle
+MainTab:CreateToggle({
+    Name = "Auto Reel / Auto Catch",
+    CurrentValue = false,
+    Flag = "AutoReel",
+    Callback = function(value)
+        State.AutoReel = value
+        if value then
+            Features.StartAutoReel()
+            Rayfield:Notify({
+                Title = "Auto Reel",
+                Content = "✅ Diaktifkan - Menangkap ikan otomatis",
+                Duration = 3,
+            })
+        else
+            Features.StopAutoReel()
+            Rayfield:Notify({
+                Title = "Auto Reel",
+                Content = "❌ Dimatikan",
+                Duration = 2,
+            })
+        end
+    end,
+})
+-- Auto Reel Toggle
+MainTab:CreateToggle({
+    Name = "Auto Reel / Auto Catch",
+    CurrentValue = false,
+    Flag = "AutoReel",
+    Callback = function(value)
+        State.AutoReel = value
+        if value then
+            Features.StartAutoReel()
+            Rayfield:Notify({
+                Title = "Auto Reel",
+                Content = "✅ Diaktifkan - Menangkap ikan otomatis",
+                Duration = 3,
+            })
+        else
+            Features.StopAutoReel()
+            Rayfield:Notify({
+                Title = "Auto Reel",
+                Content = "❌ Dimatikan",
+                Duration = 2,
+            })
+        end
+    end,
+})
+-- Auto Sell Toggle
+MainTab:CreateToggle({
+    Name = "Auto Sell",
+    CurrentValue = false,
+    Flag = "AutoSell",
+    Callback = function(value)
+        State.AutoSell = value
+        if value then
+            Features.StartAutoSell()
+            Rayfield:Notify({
+                Title = "Auto Sell",
+                Content = "✅ Diaktifkan - Menjual ikan otomatis",
+                Duration = 3,
+            })
+        else
+            Features.StopAutoSell()
+            Rayfield:Notify({
+                Title = "Auto Sell",
+                Content = "❌ Dimatikan",
+                Duration = 2,
+            })
+        end
+    end,
+})
+
+MainTab:CreateSection("Status Info")
+
+MainTab:CreateParagraph({
+    Title = "📌 Tips Penggunaan",
+    Content = "1. Equip Rod terlebih dahulu\n2. Nyalakan Auto Cast\n3. Nyalakan Auto Reel\n4. Opsional: nyalakan Auto Sell\n5. AFK dan biarkan script bekerja!"
+})
+-- ───────────────────────────────────────────────────────────
+-- 5C. TAB 2: TELEPORT
+-- ───────────────────────────────────────────────────────────
+
+local TeleportTab = Window:CreateTab("🗺️ Teleport", 4483362458)
+
+TeleportTab:CreateSection("Island Teleports")
+
+TeleportTab:CreateDropdown({
+    Name = "Pilih Pulau / Zona",
+    Options = GetIslandNames(),
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "IslandTP",
+    Callback = function(selectedOptions)
+        local selected = selectedOptions[1] or selectedOptions
+        if selected and TeleportData.Islands[selected] then
+            Utilities.TeleportTo(TeleportData.Islands[selected])
+            Rayfield:Notify({
+                Title = "Teleported!",
+                Content = "📍 Menuju: " .. selected,
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+TeleportTab:CreateSection("NPC Teleports")
+
+TeleportTab:CreateDropdown({
+    Name = "Pilih NPC",
+    Options = GetNPCNames(),
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "NPCTP",
+    Callback = function(selectedOptions)
+        local selected = selectedOptions[1] or selectedOptions
+        if selected and TeleportData.NPCs[selected] then
+            Utilities.TeleportTo(TeleportData.NPCs[selected])
+            Rayfield:Notify({
+                Title = "Teleported!",
+                Content = "👤 Menuju NPC: " .. selected,
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+TeleportTab:CreateSection("Custom Teleport")
+
+-- Teleport ke player lain
+local playerNames = {}
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        table.insert(playerNames, p.Name)
+    end
+end
+if #playerNames == 0 then playerNames = {"No Other Players"} end
+
+TeleportTab:CreateDropdown({
+    Name = "Teleport ke Player",
+    Options = playerNames,
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "PlayerTP",
+    Callback = function(selectedOptions)
+        local selected = selectedOptions[1] or selectedOptions
+        if selected and selected ~= "No Other Players" then
+            local targetPlayer = Players:FindFirstChild(selected)
+            if targetPlayer and targetPlayer.Character
+               and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                Utilities.TeleportTo(
+                    targetPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(5, 0, 0)
+                )
+                Rayfield:Notify({
+                    Title = "Teleported!",
+                    Content = "🏃 Menuju player: " .. selected,
+                    Duration = 3,
+                })
+            end
+        end
+    end,
+})
+-- 5D. TAB 3: VISUALS (ESP)
+-- ───────────────────────────────────────────────────────────
+
+local VisualsTab = Window:CreateTab("👁️ Visuals", 4483362458)
+
+VisualsTab:CreateSection("ESP Options")
+
+VisualsTab:CreateToggle({
+    Name = "Fish ESP",
+    CurrentValue = false,
+    Flag = "FishESP",
+    Callback = function(value)
+        State.FishESP = value
+        if value then
+            Features.StartFishESP()
+            Rayfield:Notify({
+                Title = "Fish ESP",
+                Content = "✅ Menampilkan lokasi ikan",
+                Duration = 3,
+            })
+        else
+            Features.StopFishESP()
+            Rayfield:Notify({
+                Title = "Fish ESP",
+                Content = "❌ Dimatikan",
+                Duration = 2,
+            })
+        end
+    end,
+})
+
+VisualsTab:CreateToggle({
+    Name = "Chest / Item ESP",
+    CurrentValue = false,
+    Flag = "ChestESP",
+    Callback = function(value)
+        State.ChestESP = value
+        if value then
+            Features.StartChestESP()
+            Rayfield:Notify({
+                Title = "Chest ESP",
+                Content = "✅ Menampilkan lokasi peti & item",
+                Duration = 3,
+            })
+        else
+            Features.StopChestESP()
+            Rayfield:Notify({
+                Title = "Chest ESP",
+                Content = "❌ Dimatikan",
+                Duration = 2,
+            })
+        end
+    end,
+})
+
+VisualsTab:CreateSection("ESP Legend")
+
+VisualsTab:CreateParagraph({
+    Title = "🎨 Warna ESP",
+    Content = "🐟 Cyan = Ikan / Fish Node\n📦 Gold = Chest / Treasure / Rare Item\n\nJarak ditampilkan dalam satuan studs."
+})
+-- ───────────────────────────────────────────────────────────
+-- 5E. TAB 4: MISC (Miscellaneous)
+-- ───────────────────────────────────────────────────────────
+
+local MiscTab = Window:CreateTab("⚙️ Misc", 4483362458)
+
+MiscTab:CreateSection("Anti-AFK")
+
+MiscTab:CreateToggle({
+    Name = "Anti-AFK (Prevent Kick)",
+    CurrentValue = false,
+    Flag = "AntiAFK",
+    Callback = function(value)
+        State.AntiAFK = value
+        if value then
+            Features.StartAntiAFK()
+            Rayfield:Notify({
+                Title = "Anti-AFK",
+                Content = "✅ Anda tidak akan di-kick server",
+                Duration = 3,
+            })
+        else
+            Features.StopAntiAFK()
+            Rayfield:Notify({
+                Title = "Anti-AFK",
+                Content = "❌ Dimatikan - Anda bisa di-kick jika AFK",
+                Duration = 3,
+            })
+        end
+    end,
+})
+MiscTab:CreateSection("Character Modifications")
+
+MiscTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 500},
+    Increment = 1,
+    Suffix = " speed",
+    CurrentValue = 16,
+    Flag = "WalkSpeed",
+    Callback = function(value)
+        Features.SetWalkSpeed(value)
+    end,
+})
+
+MiscTab:CreateSlider({
+    Name = "JumpPower",
+    Range = {50, 500},
+    Increment = 1,
+    Suffix = " power",
+    CurrentValue = 50,
+    Flag = "JumpPower",
+    Callback = function(value)
+        Features.SetJumpPower(value)
+    end,
+})
+
+-- Reset button
+MiscTab:CreateButton({
+    Name = "🔄 Reset Speed & Jump to Default",
+    Callback = function()
+        Features.SetWalkSpeed(16)
+        Features.SetJumpPower(50)
+        Rayfield:Notify({
+            Title = "Reset",
+            Content = "WalkSpeed dan JumpPower dikembalikan ke default.",
+            Duration = 3,
+        })
+    end,
+})
+MiscTab:CreateSection("Danger Zone")
+
+-- Destroy UI Button
+MiscTab:CreateButton({
+    Name = "💣 Destroy UI (Emergency)",
+    Callback = function()
+        Utilities.SafeCall("DestroyUI", function()
+            -- Stop semua fitur
+            State.AutoCast = false
+            State.AutoReel = false
+            State.AutoSell = false
+            State.FishESP = false
+            State.ChestESP = false
+            State.AntiAFK = false
+
+            Features.StopAutoCast()
+            Features.StopAutoReel()
+            Features.StopAutoSell()
+            Features.StopFishESP()
+            Features.StopChestESP()
+            Features.StopAntiAFK()
+
+            -- Reset character mods
+            Features.SetWalkSpeed(16)
+            Features.SetJumpPower(50)
+
+            -- Cleanup semua ESP
+            Utilities.ClearESP("Fish")
+            Utilities.ClearESP("Chest")
+
+            -- Disconnect semua connections
+            for _, conn in ipairs(State.Connections) do
+                if conn and conn.Connected then
+                    conn:Disconnect()
+                end
+            end
+            State.Connections = {}
+
+            -- Destroy Rayfield
+            Rayfield:Destroy()
+
+            -- Reset loaded flag
+            getgenv().KimJongLoaded = false
+        end)
+    end,
+})
+MiscTab:CreateSection("Script Info")
+
+MiscTab:CreateParagraph({
+    Title = "📜 kimjong sc | v1.0",
+    Content = "Advanced Fishing Script Hub\n\n"
+        .. "• Dirancang untuk game memancing Roblox\n"
+        .. "• Semua fitur menggunakan error handling\n"
+        .. "• Auto-save konfigurasi\n"
+        .. "• Tekan RightShift untuk show/hide UI\n\n"
+        .. "⚠️ Gunakan dengan bijak. Risiko ban ditanggung pengguna."
+})
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 6: WELCOME NOTIFICATION & WATERMARK
+-- ═══════════════════════════════════════════════════════════
+
+-- Welcome Notification (pojok kanan bawah - handled by Rayfield)
+task.delay(1, function()
+    Rayfield:Notify({
+        Title = "Welcome to kimjong sc!",
+        Content = "Script Hub v1.0 berhasil dimuat.\nSelamat memancing! 🎣",
+        Duration = 6,
+        Image = 4483362458,
+    })
+end)
+-- Custom Watermark di atas layar
+Utilities.SafeCall("CreateWatermark", function()
+    -- Cek apakah sudah ada watermark
+    if CoreGui:FindFirstChild("KimJongWatermark") then
+        CoreGui:FindFirstChild("KimJongWatermark"):Destroy()
+    end
+
+    local watermarkGui = Instance.new("ScreenGui")
+    watermarkGui.Name = "KimJongWatermark"
+    watermarkGui.ResetOnSpawn = false
+    watermarkGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    watermarkGui.IgnoreGuiInset = true
+    watermarkGui.DisplayOrder = 999
+
+    -- Coba parent ke CoreGui, fallback ke PlayerGui
+    local success = pcall(function()
+        watermarkGui.Parent = CoreGui
+    end)
+    if not success then
+        watermarkGui.Parent = PlayerGui
+    end
+
+    -- Watermark background frame
+    local watermarkFrame = Instance.new("Frame")
+    watermarkFrame.Name = "WatermarkFrame"
+    watermarkFrame.Size = UDim2.new(0, 280, 0, 32)
+    watermarkFrame.Position = UDim2.new(0.5, -140, 0, 8)
+    watermarkFrame.AnchorPoint = Vector2.new(0, 0)
+    watermarkFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    watermarkFrame.BackgroundTransparency = 0.15
+    watermarkFrame.BorderSizePixel = 0
+    watermarkFrame.Parent = watermarkGui
+
+    -- Rounded corners
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = watermarkFrame
+
+    -- Subtle border/stroke
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 80, 200) -- Purple accent
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.3
+    stroke.Parent = watermarkFrame
+
+    -- Gradient on stroke for elegance
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 80, 220)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(60, 180, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 80, 220)),
+    })
+    gradient.Parent = stroke
+
+    -- Watermark text
+    local watermarkText = Instance.new("TextLabel")
+    watermarkText.Name = "WatermarkLabel"
+    watermarkText.Size = UDim2.new(1, -16, 1, 0)
+    watermarkText.Position = UDim2.new(0, 8, 0, 0)
+    watermarkText.BackgroundTransparency = 1
+    watermarkText.Text = "🎣 kimjong sc | v1.0"
+    watermarkText.TextColor3 = Color3.fromRGB(220, 220, 240)
+    watermarkText.Font = Enum.Font.GothamBold
+    watermarkText.TextSize = 14
+    watermarkText.TextXAlignment = Enum.TextXAlignment.Center
+    watermarkText.Parent = watermarkFrame
+
+    -- Animate gradient rotation for a subtle shimmer effect
+    task.spawn(function()
+        local rotation = 0
+        while watermarkGui and watermarkGui.Parent do
+            rotation = (rotation + 1) % 360
+            gradient.Rotation = rotation
+            task.wait(0.03)
+        end
+    end)
+    -- Fade-in animation
+    watermarkFrame.BackgroundTransparency = 1
+    watermarkText.TextTransparency = 1
+
+    local fadeInBg = TweenService:Create(watermarkFrame, TweenInfo.new(1, Enum.EasingStyle.Quad), {
+        BackgroundTransparency = 0.15
+    })
+    local fadeInText = TweenService:Create(watermarkText, TweenInfo.new(1, Enum.EasingStyle.Quad), {
+        TextTransparency = 0
+    })
+
+    fadeInBg:Play()
+    fadeInText:Play()
+
+    -- Tambahkan ke State untuk cleanup
+    table.insert(State.Connections, {
+        Disconnect = function()
+            if watermarkGui and watermarkGui.Parent then
+                watermarkGui:Destroy()
+            end
+        end,
+        Connected = true
+    })
+end)
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 7: LIVE CLOCK ON WATERMARK (BONUS)
+-- ═══════════════════════════════════════════════════════════
+
+task.spawn(function()
+    while getgenv().KimJongLoaded do
+        Utilities.SafeCall("WatermarkClock", function()
+            local watermarkGui = CoreGui:FindFirstChild("KimJongWatermark")
+                or (PlayerGui and PlayerGui:FindFirstChild("KimJongWatermark"))
+            if watermarkGui then
+                local label = watermarkGui:FindFirstChild("WatermarkFrame")
+                    and watermarkGui.WatermarkFrame:FindFirstChild("WatermarkLabel")
+                if label then
+                    local timeStr = os.date("%H:%M:%S")
+                    local fps = math.floor(1 / RunService.RenderStepped:Wait())
+                    label.Text = string.format(
+                        "🎣 kimjong sc | v1.0 | ⏰ %s | 📊 %d FPS",
+                        timeStr, fps
+                    )
+                end
+            end
+        end)
+        task.wait(0.5)
+    end
+end)
+-- ═══════════════════════════════════════════════════════════
+-- SECTION 8: FINAL INITIALIZATION LOG
+-- ═══════════════════════════════════════════════════════════
+
+print("═══════════════════════════════════════════════════")
+print("  kimjong sc | v1.0 — Loaded Successfully!")
+print("  Game: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+print("  Player: " .. LocalPlayer.Name)
+print("  Time: " .. os.date("%Y-%m-%d %H:%M:%S"))
+print("═══════════════════════════════════════════════════")
